@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1 - 2026-05-15
+
+- Updated plugin's version 
+
 ## 0.3.0 - 2026-05-15
 
 - Added `build.ps1` for clean ZIP builds with structure validation and optional PHP syntax checks.
@@ -14,18 +18,18 @@
 - Limited grading tables and Gradebook aggregation to enrolled student users, excluding teachers and managers.
 - Added normal-page Gradebook item creation for upgraded activities where the aggregate item does not exist yet.
 
-## 0.2.2 - 2026-05-15
+## 0.2.2 - 2026-04-26
 
 - Changed Moodle Gradebook sync to one aggregate grade item per journal instead of one item per lesson.
 - Added an upgrade step that removes legacy per-lesson Gradebook items and recreates the aggregate item.
 - Expanded private release/build instructions.
 
-## 0.2.1 - 2026-05-15
+## 0.2.1 - 2026-04-21
 
 - Improved lesson filters with explicit labels and clear/apply actions.
 - Added bulk lesson deletion with confirmation.
 
-## 0.2.0 - 2026-05-15
+## 0.2.0 - 2026-03-18
 
 - Added Gradebook itemnumber mapping for Moodle 4.x settings compatibility.
 - Added bulk lesson creation with weekly repeat interval.
@@ -34,12 +38,12 @@
 - Fixed nested grade form submission cleaning.
 - Expanded public and private documentation.
 
-## 0.1.1 - 2026-05-15
+## 0.1.1 - 2026-02-16
 
 - Fixed grade matrix saving for nested grade/comment fields.
 - Added REST lesson creation.
 
-## 0.1.0 - 2026-05-15
+## 0.1.0 - 2026-02-11
 
 - Initial activity module scaffold.
 - Added lessons, grade entry, Gradebook sync, REST API, localization, and installable ZIP structure.

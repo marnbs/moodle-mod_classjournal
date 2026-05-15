@@ -3,6 +3,13 @@
 Class journal is a Moodle activity module for lesson-based grading. Teachers add the activity to a course, create lessons, and enter per-student grades for each lesson. Moodle Gradebook shows one aggregate grade item per journal, calculated as a sum or average depending on activity settings, and the plugin exposes Moodle External Functions for REST integrations.
 Originally created for internal use but made public.
 
+[![Moodle Plugin](https://img.shields.io/badge/Moodle-plugin-orange.svg)](https://moodle.org/plugins/) [![PHP 8.1+](https://img.shields.io/badge/PHP-8.1%2B-777bb4.svg)](https://www.php.net/) [![License GPL v3+](https://img.shields.io/badge/license-GPLv3%2B-blue.svg)](LICENSE) 
+
+[![Latest release](https://img.shields.io/github/v/release/marnbs/moodle-mod_classjournal)](https://github.com/marnbs/moodle-mod_classjournal/releases)
+
+[![Issues](https://img.shields.io/github/issues/marnbs/moodle-mod_classjournal)](https://github.com/marnbs/moodle-mod_classjournal/issues)
+
+
 ## Requirements
 
 - Moodle 4.1+
