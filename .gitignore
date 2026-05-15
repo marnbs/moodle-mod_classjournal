@@ -1,0 +1,9 @@
+classjournal.zip
+mod_classjournal.zip
+.dist/
+.php-*/
+*.log
+docs/private/
+.phpunit.result.cache
+vendor/
+node_modules/

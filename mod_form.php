@@ -1,0 +1,51 @@
+<?php
+// This file is part of Moodle - https://moodle.org/.
+
+defined('MOODLE_INTERNAL') || die();
+
+require_once($CFG->dirroot . '/course/moodleform_mod.php');
+
+/**
+ * Class journal instance form.
+ */
+class mod_classjournal_mod_form extends moodleform_mod {
+    /**
+     * Defines the activity settings form.
+     */
+    public function definition() {
+        $mform = $this->_form;
+
+        $mform->addElement('header', 'general', get_string('general', 'form'));
+        $mform->addElement('text', 'name', get_string('name'), ['size' => '64']);
+        $mform->setType('name', PARAM_TEXT);
+        $mform->addRule('name', null, 'required', null, 'client');
+
+        $this->standard_intro_elements();
+
+        $options = [
+            'sum' => get_string('aggregationsum', 'classjournal'),
+            'avg' => get_string('aggregationavg', 'classjournal'),
+        ];
+        $mform->addElement('select', 'aggregation', get_string('aggregation', 'classjournal'), $options);
+        $mform->setDefault('aggregation', 'sum');
+        $mform->addHelpButton('aggregation', 'aggregation', 'classjournal');
+
+        $mform->addElement('text', 'gradebookmax', get_string('gradebookmax', 'classjournal'), ['size' => '10']);
+        $mform->setType('gradebookmax', PARAM_FLOAT);
+        $mform->setDefault('gradebookmax', 100);
+        $mform->addRule('gradebookmax', null, 'required', null, 'client');
+        $mform->addRule('gradebookmax', get_string('err_numeric', 'form'), 'numeric', null, 'client');
+        $mform->addHelpButton('gradebookmax', 'gradebookmax', 'classjournal');
+
+        $mform->addElement('advcheckbox', 'emptygradeszero', get_string('emptygradeszero', 'classjournal'));
+        $mform->setDefault('emptygradeszero', 0);
+        $mform->addHelpButton('emptygradeszero', 'emptygradeszero', 'classjournal');
+
+        $mform->addElement('advcheckbox', 'showallgrades', get_string('showallgrades', 'classjournal'));
+        $mform->setDefault('showallgrades', 0);
+        $mform->addHelpButton('showallgrades', 'showallgrades', 'classjournal');
+
+        $this->standard_coursemodule_elements();
+        $this->add_action_buttons();
+    }
+}
