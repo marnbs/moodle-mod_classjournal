@@ -89,4 +89,4 @@ curl "https://moodle.example.com/webservice/rest/server.php" \
 
 ## License
 
-GPL v3 or later, matching Moodle plugin requirements.
+GPL v3.0
