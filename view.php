@@ -122,7 +122,7 @@ if ($canmanage && $action === 'bulkdelete' && confirm_sesskey()) {
         redirect($baseurl);
     }
 
-    list($insql, $inparams) = $DB->get_in_or_equal($selectedlessons, SQL_PARAMS_NAMED, 'lessonid');
+    [$insql, $inparams] = $DB->get_in_or_equal($selectedlessons, SQL_PARAMS_NAMED, 'lessonid');
     $inparams['journalid'] = $journal->id;
     $lessonsfordelete = $DB->get_records_select(
         'classjournal_lessons',
@@ -170,18 +170,35 @@ if ($canmanage && ($action === 'add' || ($action === 'edit' && $lessonid))) {
     echo html_writer::start_tag('fieldset');
     echo html_writer::tag('legend', get_string($lesson->id ? 'editlesson' : 'addlesson', 'classjournal'));
     echo html_writer::label(get_string('lessonname', 'classjournal'), 'lesson-name');
-    echo html_writer::empty_tag('input', ['id' => 'lesson-name', 'name' => 'name', 'type' => 'text', 'required' => 'required', 'value' => s($lesson->name), 'class' => 'form-control']);
+    echo html_writer::empty_tag('input', [
+        'id' => 'lesson-name', 'name' => 'name', 'type' => 'text',
+        'required' => 'required', 'value' => s($lesson->name), 'class' => 'form-control',
+    ]);
     echo html_writer::label(get_string('lessondate', 'classjournal'), 'lesson-date', false, ['class' => 'mt-3']);
-    echo html_writer::empty_tag('input', ['id' => 'lesson-date', 'name' => 'lessondate', 'type' => 'date', 'required' => 'required', 'value' => date('Y-m-d', $lesson->lessondate), 'class' => 'form-control']);
+    echo html_writer::empty_tag('input', [
+        'id' => 'lesson-date', 'name' => 'lessondate', 'type' => 'date', 'required' => 'required',
+        'value' => date('Y-m-d', $lesson->lessondate), 'class' => 'form-control',
+    ]);
     echo html_writer::label(get_string('maxgrade', 'classjournal'), 'lesson-maxgrade', false, ['class' => 'mt-3']);
-    echo html_writer::empty_tag('input', ['id' => 'lesson-maxgrade', 'name' => 'maxgrade', 'type' => 'number', 'step' => '0.01', 'min' => '0.01', 'required' => 'required', 'value' => s($lesson->maxgrade), 'class' => 'form-control']);
+    echo html_writer::empty_tag('input', [
+        'id' => 'lesson-maxgrade', 'name' => 'maxgrade', 'type' => 'number', 'step' => '0.01',
+        'min' => '0.01', 'required' => 'required', 'value' => s($lesson->maxgrade), 'class' => 'form-control',
+    ]);
     echo html_writer::label(get_string('description', 'classjournal'), 'lesson-description', false, ['class' => 'mt-3']);
-    echo html_writer::tag('textarea', s($lesson->description), ['id' => 'lesson-description', 'name' => 'description', 'class' => 'form-control', 'rows' => 4]);
+    echo html_writer::tag('textarea', s($lesson->description), [
+        'id' => 'lesson-description', 'name' => 'description', 'class' => 'form-control', 'rows' => 4,
+    ]);
     if (!$lesson->id) {
         echo html_writer::label(get_string('repeatcount', 'classjournal'), 'lesson-repeatcount', false, ['class' => 'mt-3']);
-        echo html_writer::empty_tag('input', ['id' => 'lesson-repeatcount', 'name' => 'repeatcount', 'type' => 'number', 'min' => '1', 'max' => '100', 'value' => 1, 'class' => 'form-control']);
+        echo html_writer::empty_tag('input', [
+            'id' => 'lesson-repeatcount', 'name' => 'repeatcount', 'type' => 'number',
+            'min' => '1', 'max' => '100', 'value' => 1, 'class' => 'form-control',
+        ]);
         echo html_writer::label(get_string('repeatinterval', 'classjournal'), 'lesson-repeatinterval', false, ['class' => 'mt-3']);
-        echo html_writer::empty_tag('input', ['id' => 'lesson-repeatinterval', 'name' => 'repeatinterval', 'type' => 'number', 'min' => '1', 'max' => '52', 'value' => 1, 'class' => 'form-control']);
+        echo html_writer::empty_tag('input', [
+            'id' => 'lesson-repeatinterval', 'name' => 'repeatinterval', 'type' => 'number',
+            'min' => '1', 'max' => '52', 'value' => 1, 'class' => 'form-control',
+        ]);
     }
     echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
     echo html_writer::tag('button', get_string('savechanges'), ['type' => 'submit', 'class' => 'btn btn-primary mt-3']);
@@ -215,12 +232,28 @@ if ($dateto !== '') {
 }
 $wheresql = implode(' AND ', $where);
 $lessoncount = $DB->count_records_select('classjournal_lessons', $wheresql, $params);
-$lessons = $DB->get_records_select('classjournal_lessons', $wheresql, $params, 'lessondate ASC, id ASC', '*', $page * $perpage, $perpage);
+$lessons = $DB->get_records_select(
+    'classjournal_lessons',
+    $wheresql,
+    $params,
+    'lessondate ASC, id ASC',
+    '*',
+    $page * $perpage,
+    $perpage
+);
 
 if ($canmanage) {
     echo html_writer::div(
-        html_writer::link(new moodle_url($baseurl, ['action' => 'add']), get_string('addlesson', 'classjournal'), ['class' => 'btn btn-primary']) . ' ' .
-        html_writer::link(new moodle_url('/mod/classjournal/grades.php', ['id' => $cm->id]), get_string('grades', 'classjournal'), ['class' => 'btn btn-secondary']),
+        html_writer::link(
+            new moodle_url($baseurl, ['action' => 'add']),
+            get_string('addlesson', 'classjournal'),
+            ['class' => 'btn btn-primary']
+        ) . ' ' .
+        html_writer::link(
+            new moodle_url('/mod/classjournal/grades.php', ['id' => $cm->id]),
+            get_string('grades', 'classjournal'),
+            ['class' => 'btn btn-secondary']
+        ),
         'mb-3'
     );
 }
@@ -229,11 +262,43 @@ $filterurl = new moodle_url('/mod/classjournal/view.php', ['id' => $cm->id]);
 echo html_writer::start_tag('form', ['method' => 'get', 'action' => $filterurl->out(false), 'class' => 'mb-3']);
 echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'id', 'value' => $cm->id]);
 echo html_writer::start_div('form-row');
-echo html_writer::div(html_writer::label(get_string('searchlessons', 'classjournal'), 'filter-q') . html_writer::empty_tag('input', ['id' => 'filter-q', 'type' => 'text', 'name' => 'q', 'value' => s($q), 'class' => 'form-control']), 'col-md-4 mb-2');
-echo html_writer::div(html_writer::label(get_string('datefrom', 'classjournal'), 'filter-datefrom') . html_writer::empty_tag('input', ['id' => 'filter-datefrom', 'type' => 'date', 'name' => 'datefrom', 'value' => s($datefrom), 'class' => 'form-control']), 'col-md-2 mb-2');
-echo html_writer::div(html_writer::label(get_string('dateto', 'classjournal'), 'filter-dateto') . html_writer::empty_tag('input', ['id' => 'filter-dateto', 'type' => 'date', 'name' => 'dateto', 'value' => s($dateto), 'class' => 'form-control']), 'col-md-2 mb-2');
-echo html_writer::div(html_writer::label(get_string('perpage', 'classjournal'), 'filter-perpage') . html_writer::select([10 => 10, 25 => 25, 50 => 50, 100 => 100], 'perpage', $perpage, false, ['id' => 'filter-perpage', 'class' => 'form-control']), 'col-md-2 mb-2');
-echo html_writer::div(html_writer::tag('button', get_string('applyfilters', 'classjournal'), ['type' => 'submit', 'class' => 'btn btn-secondary mt-4']) . ' ' . html_writer::link($baseurl, get_string('clearfilters', 'classjournal'), ['class' => 'btn btn-link mt-4']), 'col-md-2 mb-2');
+echo html_writer::div(
+    html_writer::label(get_string('searchlessons', 'classjournal'), 'filter-q') .
+    html_writer::empty_tag('input', [
+        'id' => 'filter-q', 'type' => 'text', 'name' => 'q', 'value' => s($q), 'class' => 'form-control',
+    ]),
+    'col-md-4 mb-2'
+);
+echo html_writer::div(
+    html_writer::label(get_string('datefrom', 'classjournal'), 'filter-datefrom') .
+    html_writer::empty_tag('input', [
+        'id' => 'filter-datefrom', 'type' => 'date', 'name' => 'datefrom',
+        'value' => s($datefrom), 'class' => 'form-control',
+    ]),
+    'col-md-2 mb-2'
+);
+echo html_writer::div(
+    html_writer::label(get_string('dateto', 'classjournal'), 'filter-dateto') .
+    html_writer::empty_tag('input', [
+        'id' => 'filter-dateto', 'type' => 'date', 'name' => 'dateto',
+        'value' => s($dateto), 'class' => 'form-control',
+    ]),
+    'col-md-2 mb-2'
+);
+echo html_writer::div(
+    html_writer::label(get_string('perpage', 'classjournal'), 'filter-perpage') .
+    html_writer::select([10 => 10, 25 => 25, 50 => 50, 100 => 100], 'perpage', $perpage, false, [
+        'id' => 'filter-perpage', 'class' => 'form-control',
+    ]),
+    'col-md-2 mb-2'
+);
+echo html_writer::div(
+    html_writer::tag('button', get_string('applyfilters', 'classjournal'), [
+        'type' => 'submit', 'class' => 'btn btn-secondary mt-4',
+    ]) . ' ' .
+    html_writer::link($baseurl, get_string('clearfilters', 'classjournal'), ['class' => 'btn btn-link mt-4']),
+    'col-md-2 mb-2'
+);
 echo html_writer::end_div();
 echo html_writer::end_tag('form');
 
@@ -261,7 +326,9 @@ if ($canmanage) {
 foreach ($lessons as $lesson) {
     $row = [];
     if ($canmanage) {
-        $row[] = html_writer::checkbox('selectedlessons[]', $lesson->id, false, '', ['aria-label' => get_string('selectlesson', 'classjournal', format_string($lesson->name))]);
+        $row[] = html_writer::checkbox('selectedlessons[]', $lesson->id, false, '', [
+            'aria-label' => get_string('selectlesson', 'classjournal', format_string($lesson->name)),
+        ]);
     }
     $row = array_merge($row, [
         format_string($lesson->name),
@@ -270,8 +337,15 @@ foreach ($lessons as $lesson) {
         format_text($lesson->description, FORMAT_PLAIN, ['context' => $context]),
     ]);
     if ($canmanage) {
-        $row[] = html_writer::link(new moodle_url($baseurl, ['action' => 'edit', 'lessonid' => $lesson->id]), get_string('edit')) . ' | ' .
-            html_writer::link(new moodle_url($baseurl, ['action' => 'delete', 'lessonid' => $lesson->id, 'sesskey' => sesskey()]), get_string('delete'));
+        $editlink = html_writer::link(
+            new moodle_url($baseurl, ['action' => 'edit', 'lessonid' => $lesson->id]),
+            get_string('edit')
+        );
+        $deletelink = html_writer::link(
+            new moodle_url($baseurl, ['action' => 'delete', 'lessonid' => $lesson->id, 'sesskey' => sesskey()]),
+            get_string('delete')
+        );
+        $row[] = $editlink . ' | ' . $deletelink;
     }
     $table->data[] = $row;
 }
@@ -281,7 +355,9 @@ if ($canmanage) {
 }
 echo html_writer::table($table);
 if ($canmanage) {
-    echo html_writer::tag('button', get_string('deleteselectedlessons', 'classjournal'), ['type' => 'submit', 'class' => 'btn btn-danger mb-3']);
+    echo html_writer::tag('button', get_string('deleteselectedlessons', 'classjournal'), [
+        'type' => 'submit', 'class' => 'btn btn-danger mb-3',
+    ]);
     echo html_writer::end_tag('form');
 }
 echo $OUTPUT->paging_bar($lessoncount, $page, $perpage, new moodle_url($baseurl, [
@@ -292,8 +368,12 @@ echo $OUTPUT->paging_bar($lessoncount, $page, $perpage, new moodle_url($baseurl,
 ]));
 
 if (!$canviewall && $journal->showallgrades) {
-    $students = classjournal_get_student_users($context, 'u.id, u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic, u.middlename, u.alternatename', 'u.lastname, u.firstname');
-    list($insql, $params) = $DB->get_in_or_equal(array_keys($lessons), SQL_PARAMS_NAMED, 'lessonid');
+    $students = classjournal_get_student_users(
+        $context,
+        'u.id, u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic, u.middlename, u.alternatename',
+        'u.lastname, u.firstname'
+    );
+    [$insql, $params] = $DB->get_in_or_equal(array_keys($lessons), SQL_PARAMS_NAMED, 'lessonid');
     $records = $DB->get_records_select('classjournal_grades', "lessonid $insql", $params);
     $grades = [];
     foreach ($records as $record) {
@@ -324,7 +404,7 @@ if (!$canviewall && $journal->showallgrades) {
 }
 
 if (!$canviewall && !$journal->showallgrades) {
-    list($insql, $params) = $DB->get_in_or_equal(array_keys($lessons), SQL_PARAMS_NAMED, 'lessonid');
+    [$insql, $params] = $DB->get_in_or_equal(array_keys($lessons), SQL_PARAMS_NAMED, 'lessonid');
     $params['userid'] = $USER->id;
     $grades = $DB->get_records_select('classjournal_grades', "lessonid $insql AND userid = :userid", $params);
     $gradesbylesson = [];
@@ -334,7 +414,11 @@ if (!$canviewall && !$journal->showallgrades) {
     $total = classjournal_calculate_total($journal, $lessons, $gradesbylesson);
     echo $OUTPUT->heading(get_string('grades', 'classjournal'), 3);
     $studenttable = new html_table();
-    $studenttable->head = [get_string('lesson', 'classjournal'), get_string('grade', 'classjournal'), get_string('comment', 'classjournal')];
+    $studenttable->head = [
+        get_string('lesson', 'classjournal'),
+        get_string('grade', 'classjournal'),
+        get_string('comment', 'classjournal'),
+    ];
     foreach ($lessons as $lesson) {
         $grade = null;
         $comment = '';

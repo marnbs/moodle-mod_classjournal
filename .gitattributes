@@ -1,0 +1,17 @@
+# Normalise line endings to LF in the repository for all text files.
+* text=auto eol=lf
+
+# Explicitly treat source files as text with LF endings.
+*.php text eol=lf
+*.xml text eol=lf
+*.md text eol=lf
+*.js text eol=lf
+*.css text eol=lf
+*.json text eol=lf
+*.svg text eol=lf
+*.yml text eol=lf
+
+# Binary files that must never be normalised.
+*.png binary
+*.jpg binary
+*.gif binary

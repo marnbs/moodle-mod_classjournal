@@ -46,7 +46,10 @@ $table = new html_table();
 $table->head = [get_string('name'), get_string('intro')];
 foreach ($records as $record) {
     $url = new moodle_url('/mod/classjournal/view.php', ['id' => $record->coursemodule]);
-    $table->data[] = [html_writer::link($url, format_string($record->name)), format_module_intro('classjournal', $record, $record->coursemodule)];
+    $table->data[] = [
+        html_writer::link($url, format_string($record->name)),
+        format_module_intro('classjournal', $record, $record->coursemodule),
+    ];
 }
 echo html_writer::table($table);
 echo $OUTPUT->footer();

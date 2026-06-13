@@ -23,13 +23,10 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Defines the structure step to restore one classjournal activity.
  */
 class restore_classjournal_activity_structure_step extends restore_activity_structure_step {
-
     /**
      * Defines the structure to be restored.
      *

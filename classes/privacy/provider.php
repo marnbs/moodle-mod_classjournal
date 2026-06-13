@@ -24,8 +24,6 @@
 
 namespace mod_classjournal\privacy;
 
-defined('MOODLE_INTERNAL') || die();
-
 use core_privacy\local\metadata\collection;
 use core_privacy\local\request\contextlist;
 use core_privacy\local\request\plugin\provider as plugin_provider;
@@ -37,7 +35,6 @@ class provider implements
     \core_privacy\local\metadata\provider,
     \core_privacy\local\request\core_userlist_provider,
     plugin_provider {
-
     /**
      * Metadata.
      *
@@ -83,8 +80,7 @@ class provider implements
     /**
      * Export user data.
      *
-     * @param \context $context
-     * @param array $approveduserlist
+     * @param \core_privacy\local\request\approved_contextlist $contextlist
      */
     public static function export_user_data(\core_privacy\local\request\approved_contextlist $contextlist) {
     }
@@ -108,9 +104,14 @@ class provider implements
         if (!$journal) {
             return;
         }
-        $lessonids = $DB->get_fieldset_select('classjournal_lessons', 'id', 'journalid = :journalid', ['journalid' => $journal->id]);
+        $lessonids = $DB->get_fieldset_select(
+            'classjournal_lessons',
+            'id',
+            'journalid = :journalid',
+            ['journalid' => $journal->id]
+        );
         if ($lessonids) {
-            list($insql, $params) = $DB->get_in_or_equal($lessonids, SQL_PARAMS_NAMED);
+            [$insql, $params] = $DB->get_in_or_equal($lessonids, SQL_PARAMS_NAMED);
             $DB->delete_records_select('classjournal_grades', "lessonid $insql", $params);
         }
     }
@@ -138,9 +139,14 @@ class provider implements
             if (!$journal) {
                 continue;
             }
-            $lessonids = $DB->get_fieldset_select('classjournal_lessons', 'id', 'journalid = :journalid', ['journalid' => $journal->id]);
+            $lessonids = $DB->get_fieldset_select(
+                'classjournal_lessons',
+                'id',
+                'journalid = :journalid',
+                ['journalid' => $journal->id]
+            );
             if ($lessonids) {
-                list($insql, $params) = $DB->get_in_or_equal($lessonids, SQL_PARAMS_NAMED);
+                [$insql, $params] = $DB->get_in_or_equal($lessonids, SQL_PARAMS_NAMED);
                 $params['userid'] = $contextlist->get_user()->id;
                 $DB->delete_records_select('classjournal_grades', "lessonid $insql AND userid = :userid", $params);
             }
@@ -190,12 +196,21 @@ class provider implements
         if (!$journal) {
             return;
         }
-        $lessonids = $DB->get_fieldset_select('classjournal_lessons', 'id', 'journalid = :journalid', ['journalid' => $journal->id]);
+        $lessonids = $DB->get_fieldset_select(
+            'classjournal_lessons',
+            'id',
+            'journalid = :journalid',
+            ['journalid' => $journal->id]
+        );
         if (!$lessonids) {
             return;
         }
-        list($lessoninsql, $lessonparams) = $DB->get_in_or_equal($lessonids, SQL_PARAMS_NAMED, 'lessonid');
-        list($userinsql, $userparams) = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'userid');
-        $DB->delete_records_select('classjournal_grades', "lessonid $lessoninsql AND userid $userinsql", $lessonparams + $userparams);
+        [$lessoninsql, $lessonparams] = $DB->get_in_or_equal($lessonids, SQL_PARAMS_NAMED, 'lessonid');
+        [$userinsql, $userparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'userid');
+        $DB->delete_records_select(
+            'classjournal_grades',
+            "lessonid $lessoninsql AND userid $userinsql",
+            $lessonparams + $userparams
+        );
     }
 }

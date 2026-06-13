@@ -31,7 +31,6 @@ require_once($CFG->dirroot . '/mod/classjournal/backup/moodle2/backup_classjourn
  * Backup task that provides all the settings and steps to perform a backup of the activity.
  */
 class backup_classjournal_activity_task extends backup_activity_task {
-
     /**
      * Define (add) particular settings this activity can have.
      */

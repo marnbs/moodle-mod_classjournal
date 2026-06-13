@@ -31,7 +31,6 @@ require_once($CFG->dirroot . '/mod/classjournal/backup/moodle2/restore_classjour
  * Restore task that provides all the settings and steps to perform a restore of the activity.
  */
 class restore_classjournal_activity_task extends restore_activity_task {
-
     /**
      * Define (add) particular settings this activity can have.
      */
@@ -75,7 +74,7 @@ class restore_classjournal_activity_task extends restore_activity_task {
 
     /**
      * Define the restore log rules that will be applied by the
-     * {@link restore_logs_processor} when restoring classjournal logs.
+     * restore_logs_processor when restoring classjournal logs.
      *
      * @return array
      */

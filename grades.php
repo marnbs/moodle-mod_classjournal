@@ -79,8 +79,20 @@ if ($dateto !== '') {
 }
 $wheresql = implode(' AND ', $where);
 $lessoncount = $DB->count_records_select('classjournal_lessons', $wheresql, $params);
-$lessons = $DB->get_records_select('classjournal_lessons', $wheresql, $params, 'lessondate ASC, id ASC', '*', $page * $perpage, $perpage);
-$students = classjournal_get_student_users($context, 'u.id, u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic, u.middlename, u.alternatename, u.email', 'u.lastname, u.firstname');
+$lessons = $DB->get_records_select(
+    'classjournal_lessons',
+    $wheresql,
+    $params,
+    'lessondate ASC, id ASC',
+    '*',
+    $page * $perpage,
+    $perpage
+);
+$students = classjournal_get_student_users(
+    $context,
+    'u.id, u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic, u.middlename, u.alternatename, u.email',
+    'u.lastname, u.firstname'
+);
 
 if (data_submitted() && confirm_sesskey()) {
     $submittedgrades = $_POST['grade'] ?? [];
@@ -108,22 +120,62 @@ $filterurl = new moodle_url('/mod/classjournal/grades.php', ['id' => $cm->id]);
 echo html_writer::start_tag('form', ['method' => 'get', 'action' => $filterurl->out(false), 'class' => 'mb-3']);
 echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'id', 'value' => $cm->id]);
 echo html_writer::start_div('form-row');
-echo html_writer::div(html_writer::label(get_string('searchlessons', 'classjournal'), 'filter-q') . html_writer::empty_tag('input', ['id' => 'filter-q', 'type' => 'text', 'name' => 'q', 'value' => s($q), 'class' => 'form-control']), 'col-md-4 mb-2');
-echo html_writer::div(html_writer::label(get_string('datefrom', 'classjournal'), 'filter-datefrom') . html_writer::empty_tag('input', ['id' => 'filter-datefrom', 'type' => 'date', 'name' => 'datefrom', 'value' => s($datefrom), 'class' => 'form-control']), 'col-md-2 mb-2');
-echo html_writer::div(html_writer::label(get_string('dateto', 'classjournal'), 'filter-dateto') . html_writer::empty_tag('input', ['id' => 'filter-dateto', 'type' => 'date', 'name' => 'dateto', 'value' => s($dateto), 'class' => 'form-control']), 'col-md-2 mb-2');
-echo html_writer::div(html_writer::label(get_string('perpage', 'classjournal'), 'filter-perpage') . html_writer::select([5 => 5, 10 => 10, 20 => 20, 50 => 50], 'perpage', $perpage, false, ['id' => 'filter-perpage', 'class' => 'form-control']), 'col-md-2 mb-2');
-echo html_writer::div(html_writer::tag('button', get_string('applyfilters', 'classjournal'), ['type' => 'submit', 'class' => 'btn btn-secondary mt-4']) . ' ' . html_writer::link(new moodle_url('/mod/classjournal/grades.php', ['id' => $cm->id]), get_string('clearfilters', 'classjournal'), ['class' => 'btn btn-link mt-4']), 'col-md-2 mb-2');
+echo html_writer::div(
+    html_writer::label(get_string('searchlessons', 'classjournal'), 'filter-q') .
+    html_writer::empty_tag('input', [
+        'id' => 'filter-q', 'type' => 'text', 'name' => 'q', 'value' => s($q), 'class' => 'form-control',
+    ]),
+    'col-md-4 mb-2'
+);
+echo html_writer::div(
+    html_writer::label(get_string('datefrom', 'classjournal'), 'filter-datefrom') .
+    html_writer::empty_tag('input', [
+        'id' => 'filter-datefrom', 'type' => 'date', 'name' => 'datefrom',
+        'value' => s($datefrom), 'class' => 'form-control',
+    ]),
+    'col-md-2 mb-2'
+);
+echo html_writer::div(
+    html_writer::label(get_string('dateto', 'classjournal'), 'filter-dateto') .
+    html_writer::empty_tag('input', [
+        'id' => 'filter-dateto', 'type' => 'date', 'name' => 'dateto',
+        'value' => s($dateto), 'class' => 'form-control',
+    ]),
+    'col-md-2 mb-2'
+);
+echo html_writer::div(
+    html_writer::label(get_string('perpage', 'classjournal'), 'filter-perpage') .
+    html_writer::select([5 => 5, 10 => 10, 20 => 20, 50 => 50], 'perpage', $perpage, false, [
+        'id' => 'filter-perpage', 'class' => 'form-control',
+    ]),
+    'col-md-2 mb-2'
+);
+echo html_writer::div(
+    html_writer::tag('button', get_string('applyfilters', 'classjournal'), [
+        'type' => 'submit', 'class' => 'btn btn-secondary mt-4',
+    ]) . ' ' .
+    html_writer::link(
+        new moodle_url('/mod/classjournal/grades.php', ['id' => $cm->id]),
+        get_string('clearfilters', 'classjournal'),
+        ['class' => 'btn btn-link mt-4']
+    ),
+    'col-md-2 mb-2'
+);
 echo html_writer::end_div();
 echo html_writer::end_tag('form');
 
 if (!$lessons) {
     echo $OUTPUT->notification(get_string('nolessons', 'classjournal'), 'info');
-    echo html_writer::link(new moodle_url('/mod/classjournal/view.php', ['id' => $cm->id]), get_string('back'), ['class' => 'btn btn-secondary']);
+    echo html_writer::link(
+        new moodle_url('/mod/classjournal/view.php', ['id' => $cm->id]),
+        get_string('back'),
+        ['class' => 'btn btn-secondary']
+    );
     echo $OUTPUT->footer();
     exit;
 }
 
-list($lessoninsql, $lessonparams) = $DB->get_in_or_equal(array_keys($lessons), SQL_PARAMS_NAMED, 'lessonid');
+[$lessoninsql, $lessonparams] = $DB->get_in_or_equal(array_keys($lessons), SQL_PARAMS_NAMED, 'lessonid');
 $existing = $DB->get_records_select('classjournal_grades', "lessonid $lessoninsql", $lessonparams);
 $grades = [];
 foreach ($existing as $record) {
@@ -138,7 +190,10 @@ echo html_writer::start_tag('thead');
 echo html_writer::start_tag('tr');
 echo html_writer::tag('th', get_string('user'));
 foreach ($lessons as $lesson) {
-    echo html_writer::tag('th', format_string($lesson->name) . html_writer::tag('div', userdate($lesson->lessondate, get_string('strftimedateshort')) . ' / ' . format_float($lesson->maxgrade), ['class' => 'small text-muted']));
+    $lessonmeta = userdate($lesson->lessondate, get_string('strftimedateshort')) . ' / ' . format_float($lesson->maxgrade);
+    echo html_writer::tag('th', format_string($lesson->name) . html_writer::tag('div', $lessonmeta, [
+        'class' => 'small text-muted',
+    ]));
 }
 echo html_writer::end_tag('tr');
 echo html_writer::end_tag('thead');
@@ -185,7 +240,11 @@ echo $OUTPUT->paging_bar($lessoncount, $page, $perpage, new moodle_url('/mod/cla
     'perpage' => $perpage,
 ]));
 echo html_writer::tag('button', get_string('savegrades', 'classjournal'), ['type' => 'submit', 'class' => 'btn btn-primary']);
-echo ' ' . html_writer::link(new moodle_url('/mod/classjournal/view.php', ['id' => $cm->id]), get_string('back'), ['class' => 'btn btn-secondary']);
+echo ' ' . html_writer::link(
+    new moodle_url('/mod/classjournal/view.php', ['id' => $cm->id]),
+    get_string('back'),
+    ['class' => 'btn btn-secondary']
+);
 echo html_writer::end_tag('form');
 
 echo $OUTPUT->footer();

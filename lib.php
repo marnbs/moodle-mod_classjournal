@@ -22,8 +22,6 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Supported module features.
  *
@@ -345,7 +343,7 @@ function classjournal_get_aggregate_grades(stdClass $journal, int $userid = 0): 
         return [];
     }
 
-    list($lessoninsql, $params) = $DB->get_in_or_equal(array_keys($lessons), SQL_PARAMS_NAMED, 'lessonid');
+    [$lessoninsql, $params] = $DB->get_in_or_equal(array_keys($lessons), SQL_PARAMS_NAMED, 'lessonid');
     $where = "lessonid $lessoninsql";
     if ($userid) {
         $where .= ' AND userid = :userid';
@@ -477,7 +475,11 @@ function classjournal_update_grades($journal, $userid = 0, $nullifnone = true) {
  * @param string $sort
  * @return array
  */
-function classjournal_get_student_users(context_module $context, string $fields = 'u.*', string $sort = 'u.lastname, u.firstname'): array {
+function classjournal_get_student_users(
+    context_module $context,
+    string $fields = 'u.*',
+    string $sort = 'u.lastname, u.firstname'
+): array {
     $users = get_enrolled_users($context, 'mod/classjournal:view', 0, $fields, $sort);
     foreach ($users as $key => $user) {
         if (!classjournal_is_student_user($context, (int)$user->id)) {

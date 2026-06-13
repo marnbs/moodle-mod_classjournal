@@ -22,8 +22,6 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Upgrade steps for mod_classjournal.
  *
@@ -36,7 +34,7 @@ function xmldb_classjournal_upgrade($oldversion) {
     if ($oldversion < 2026051504) {
         $journals = $DB->get_records_menu('classjournal', null, '', 'id, course');
         if ($journals) {
-            list($insql, $params) = $DB->get_in_or_equal(array_keys($journals), SQL_PARAMS_NAMED, 'journalid');
+            [$insql, $params] = $DB->get_in_or_equal(array_keys($journals), SQL_PARAMS_NAMED, 'journalid');
             $params['itemtype'] = 'mod';
             $params['itemmodule'] = 'classjournal';
 
@@ -49,7 +47,7 @@ function xmldb_classjournal_upgrade($oldversion) {
             );
 
             if ($legacyitems) {
-                list($iteminsql, $itemparams) = $DB->get_in_or_equal(array_keys($legacyitems), SQL_PARAMS_NAMED, 'itemid');
+                [$iteminsql, $itemparams] = $DB->get_in_or_equal(array_keys($legacyitems), SQL_PARAMS_NAMED, 'itemid');
                 $DB->delete_records_select('grade_grades', "itemid $iteminsql", $itemparams);
                 $DB->delete_records_select('grade_items', "id $iteminsql", $itemparams);
             }
@@ -62,12 +60,30 @@ function xmldb_classjournal_upgrade($oldversion) {
         $dbman = $DB->get_manager();
         $table = new xmldb_table('classjournal');
 
-        $emptygradeszero = new xmldb_field('emptygradeszero', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'aggregation');
+        $emptygradeszero = new xmldb_field(
+            'emptygradeszero',
+            XMLDB_TYPE_INTEGER,
+            '1',
+            null,
+            XMLDB_NOTNULL,
+            null,
+            '0',
+            'aggregation'
+        );
         if (!$dbman->field_exists($table, $emptygradeszero)) {
             $dbman->add_field($table, $emptygradeszero);
         }
 
-        $gradebookmax = new xmldb_field('gradebookmax', XMLDB_TYPE_NUMBER, '10, 5', null, XMLDB_NOTNULL, null, '100', 'emptygradeszero');
+        $gradebookmax = new xmldb_field(
+            'gradebookmax',
+            XMLDB_TYPE_NUMBER,
+            '10, 5',
+            null,
+            XMLDB_NOTNULL,
+            null,
+            '100',
+            'emptygradeszero'
+        );
         if (!$dbman->field_exists($table, $gradebookmax)) {
             $dbman->add_field($table, $gradebookmax);
         }

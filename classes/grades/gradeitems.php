@@ -24,8 +24,6 @@
 
 namespace mod_classjournal\grades;
 
-defined('MOODLE_INTERNAL') || die();
-
 use core_grades\local\gradeitem\itemnumber_mapping;
 
 /**
