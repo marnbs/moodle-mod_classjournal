@@ -1,5 +1,26 @@
 <?php
-// This file is part of Moodle - https://moodle.org/.
+// This file is part of Moodle - https://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+
+/**
+ * Library of interface functions and constants for mod_classjournal.
+ *
+ * @package    mod_classjournal
+ * @copyright  2026 Konstantin K <rbk112v@gmail.com>
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 
 defined('MOODLE_INTERNAL') || die();
 
@@ -14,12 +35,39 @@ function classjournal_supports($feature) {
         case FEATURE_MOD_INTRO:
         case FEATURE_GRADE_HAS_GRADE:
         case FEATURE_SHOW_DESCRIPTION:
-            return true;
+        case FEATURE_COMPLETION_TRACKS_VIEWS:
         case FEATURE_BACKUP_MOODLE2:
             return true;
         default:
             return null;
     }
+}
+
+/**
+ * Mark the activity completed (if required) and trigger the course_module_viewed event.
+ *
+ * @param stdClass $journal classjournal object
+ * @param stdClass $course course object
+ * @param stdClass $cm course module object
+ * @param context_module $context context object
+ * @return void
+ */
+function classjournal_view(stdClass $journal, stdClass $course, $cm, context_module $context): void {
+    // Trigger course_module_viewed event.
+    $params = [
+        'context' => $context,
+        'objectid' => $journal->id,
+    ];
+
+    $event = \mod_classjournal\event\course_module_viewed::create($params);
+    $event->add_record_snapshot('course_modules', $cm);
+    $event->add_record_snapshot('course', $course);
+    $event->add_record_snapshot('classjournal', $journal);
+    $event->trigger();
+
+    // Completion.
+    $completion = new completion_info($course);
+    $completion->set_module_viewed($cm);
 }
 
 /**
