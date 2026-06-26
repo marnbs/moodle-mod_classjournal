@@ -34,7 +34,6 @@ require_once($CFG->dirroot . '/mod/classjournal/lib.php');
  * Lesson listing with sortable columns and paging.
  */
 class lessons_table extends \table_sql {
-
     /** @var \context Module context. */
     protected $context;
 

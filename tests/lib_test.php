@@ -29,7 +29,6 @@ require_once($CFG->dirroot . '/mod/classjournal/lib.php');
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class lib_test extends \advanced_testcase {
-
     /**
      * Build a lightweight journal object for the pure calculation helpers.
      *
@@ -441,7 +440,7 @@ final class lib_test extends \advanced_testcase {
 
         $lesson = classjournal_create_lesson($journal, 'Scaled', '', time(), 0, (int)$scale->id);
         $this->assertEquals($scale->id, $lesson->scaleid);
-        // maxgrade is forced to the number of scale options (3) so percentages keep working.
+        // Maxgrade is forced to the number of scale options (3) so percentages keep working.
         $this->assertEqualsWithDelta(3.0, (float)$lesson->maxgrade, 0.0001);
         $this->assertTrue(classjournal_is_scale_lesson($lesson));
 

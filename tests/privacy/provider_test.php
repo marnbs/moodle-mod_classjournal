@@ -34,7 +34,6 @@ require_once($CFG->dirroot . '/mod/classjournal/lib.php');
  * @covers     \mod_classjournal\privacy\provider
  */
 final class provider_test extends \core_privacy\tests\provider_testcase {
-
     /** @var \stdClass course. */
     protected $course;
 

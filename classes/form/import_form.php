@@ -35,7 +35,6 @@ require_once($CFG->libdir . '/formslib.php');
  * Expects customdata: id (course module id).
  */
 class import_form extends \moodleform {
-
     /**
      * Form definition.
      */

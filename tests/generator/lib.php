@@ -22,13 +22,10 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Test data generator for mod_classjournal.
  */
 class mod_classjournal_generator extends testing_module_generator {
-
     /**
      * Create a new class journal instance with sensible defaults.
      *

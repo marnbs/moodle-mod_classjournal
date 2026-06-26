@@ -114,7 +114,8 @@ function xmldb_classjournal_upgrade($oldversion) {
         $dbman = $DB->get_manager();
 
         $journal = new xmldb_table('classjournal');
-        $calendarevents = new xmldb_field('calendarevents', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '1', 'showallgrades');
+        $calendarevents = new xmldb_field('calendarevents', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL,
+            null, '1', 'showallgrades');
         if (!$dbman->field_exists($journal, $calendarevents)) {
             $dbman->add_field($journal, $calendarevents);
         }

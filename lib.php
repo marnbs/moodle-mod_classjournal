@@ -358,6 +358,11 @@ function classjournal_delete_instance($id) {
         classjournal_delete_lesson($lesson, false);
     }
 
+    if ($lessons) {
+        list($insql, $params) = $DB->get_in_or_equal(array_keys($lessons));
+        $DB->delete_records_select('classjournal_grades', "lessonid $insql", $params);
+    }
+
     return $DB->delete_records('classjournal', ['id' => $journal->id]);
 }
 

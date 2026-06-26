@@ -25,7 +25,6 @@ namespace mod_classjournal;
  * @covers     \mod_classjournal_generator
  */
 final class generator_test extends \advanced_testcase {
-
     /**
      * The generator creates a journal instance, course module and lessons.
      */

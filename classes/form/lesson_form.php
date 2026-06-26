@@ -36,7 +36,6 @@ require_once($CFG->libdir . '/gradelib.php');
  * Expects customdata: isedit (bool), courseid (int), defaultmaxgrade (float).
  */
 class lesson_form extends \moodleform {
-
     /**
      * Form definition.
      */
