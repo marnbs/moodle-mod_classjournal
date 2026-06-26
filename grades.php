@@ -53,6 +53,7 @@ $PAGE->set_url($url);
 $PAGE->set_title(format_string($journal->name) . ': ' . get_string('grades', 'classjournal'));
 $PAGE->set_heading($course->fullname);
 $PAGE->set_context($context);
+$PAGE->requires->js(new moodle_url('/mod/classjournal/js/grid.js'));
 
 classjournal_ensure_grade_item($journal);
 
@@ -98,6 +99,7 @@ if (data_submitted() && confirm_sesskey()) {
     $submittedgrades = $_POST['grade'] ?? [];
     $submittedcomments = $_POST['comment'] ?? [];
 
+    $changes = [];
     foreach ($students as $student) {
         foreach ($lessons as $lesson) {
             $rawgrade = $submittedgrades[$student->id][$lesson->id] ?? '';
@@ -107,14 +109,35 @@ if (data_submitted() && confirm_sesskey()) {
             $rawcomment = $submittedcomments[$student->id][$lesson->id] ?? '';
             $rawcomment = is_array($rawcomment) ? '' : $rawcomment;
             $comment = clean_param($rawcomment, PARAM_TEXT);
-            classjournal_set_lesson_grade($lesson, (int)$student->id, $grade, $comment);
+
+            $changes[] = (object)[
+                'lessonid' => (int)$lesson->id,
+                'userid' => (int)$student->id,
+                'grade' => $grade,
+                'comment' => $comment,
+            ];
         }
     }
+    classjournal_set_lesson_grades($journal, $lessons, $changes);
     redirect($url, get_string('changessaved'), null, \core\output\notification::NOTIFY_SUCCESS);
 }
 
 echo $OUTPUT->header();
 echo $OUTPUT->heading(format_string($journal->name) . ': ' . get_string('grades', 'classjournal'));
+
+echo html_writer::div(
+    html_writer::link(
+        new moodle_url('/mod/classjournal/export.php', ['id' => $cm->id]),
+        get_string('exportcsv', 'classjournal'),
+        ['class' => 'btn btn-secondary']
+    ) . ' ' .
+    html_writer::link(
+        new moodle_url('/mod/classjournal/import.php', ['id' => $cm->id]),
+        get_string('importcsv', 'classjournal'),
+        ['class' => 'btn btn-secondary']
+    ),
+    'mb-3'
+);
 
 $filterurl = new moodle_url('/mod/classjournal/grades.php', ['id' => $cm->id]);
 echo html_writer::start_tag('form', ['method' => 'get', 'action' => $filterurl->out(false), 'class' => 'mb-3']);
@@ -185,15 +208,35 @@ foreach ($existing as $record) {
 echo html_writer::start_tag('form', ['method' => 'post', 'action' => $url]);
 echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
 echo html_writer::start_div('table-responsive');
-echo html_writer::start_tag('table', ['class' => 'generaltable table table-striped']);
+echo html_writer::start_tag('table', [
+    'id' => 'cj-grade-grid',
+    'class' => 'generaltable table table-striped',
+    'data-cmid' => $cm->id,
+]);
+// Cache scale option labels for any scale-graded lessons on this page.
+$scalevalues = [];
+foreach ($lessons as $lesson) {
+    if (classjournal_is_scale_lesson($lesson)) {
+        $scalevalues[$lesson->id] = classjournal_get_scale_values((int)$lesson->scaleid);
+    }
+}
+
 echo html_writer::start_tag('thead');
 echo html_writer::start_tag('tr');
-echo html_writer::tag('th', get_string('user'));
+echo html_writer::tag('th', get_string('user'), ['class' => 'cj-user']);
 foreach ($lessons as $lesson) {
-    $lessonmeta = userdate($lesson->lessondate, get_string('strftimedateshort')) . ' / ' . format_float($lesson->maxgrade);
+    $maxlabel = classjournal_is_scale_lesson($lesson)
+        ? get_string('gradetypescale', 'classjournal')
+        : format_float($lesson->maxgrade);
+    $lessonmeta = userdate($lesson->lessondate, get_string('strftimedateshort')) . ' / ' . $maxlabel;
+    $fill = html_writer::tag('button', get_string('fillcolumn', 'classjournal'), [
+        'type' => 'button',
+        'class' => 'btn btn-link cj-fill',
+        'data-lessonid' => $lesson->id,
+    ]);
     echo html_writer::tag('th', format_string($lesson->name) . html_writer::tag('div', $lessonmeta, [
         'class' => 'small text-muted',
-    ]));
+    ]) . $fill);
 }
 echo html_writer::end_tag('tr');
 echo html_writer::end_tag('thead');
@@ -201,28 +244,47 @@ echo html_writer::start_tag('tbody');
 
 foreach ($students as $student) {
     echo html_writer::start_tag('tr');
-    echo html_writer::tag('th', fullname($student));
+    echo html_writer::tag('th', fullname($student), ['class' => 'cj-user']);
     foreach ($lessons as $lesson) {
         $record = $grades[$student->id][$lesson->id] ?? null;
         $gradevalue = $record && $record->grade !== null ? $record->grade : '';
         $commentvalue = $record ? $record->comment : '';
-        $gradeinput = html_writer::empty_tag('input', [
-            'type' => 'number',
-            'name' => "grade[$student->id][$lesson->id]",
-            'value' => s($gradevalue),
-            'min' => '0',
-            'max' => s($lesson->maxgrade),
-            'step' => '0.01',
-            'class' => 'form-control',
+        $gradeattrs = [
+            'class' => 'form-control cj-grade',
             'aria-label' => get_string('grade', 'classjournal'),
-        ]);
+            'data-userid' => $student->id,
+            'data-lessonid' => $lesson->id,
+            'data-max' => $lesson->maxgrade,
+        ];
+        if (classjournal_is_scale_lesson($lesson)) {
+            $options = ['' => '-'] + $scalevalues[$lesson->id];
+            $selected = $gradevalue === '' ? '' : (string)(int)round((float)$gradevalue);
+            $gradeinput = html_writer::select(
+                $options,
+                "grade[$student->id][$lesson->id]",
+                $selected,
+                false,
+                $gradeattrs
+            );
+        } else {
+            $gradeinput = html_writer::empty_tag('input', $gradeattrs + [
+                'type' => 'number',
+                'name' => "grade[$student->id][$lesson->id]",
+                'value' => s($gradevalue),
+                'min' => '0',
+                'max' => s($lesson->maxgrade),
+                'step' => '0.01',
+            ]);
+        }
         $commentinput = html_writer::empty_tag('input', [
             'type' => 'text',
             'name' => "comment[$student->id][$lesson->id]",
             'value' => s($commentvalue),
-            'class' => 'form-control mt-1',
+            'class' => 'form-control mt-1 cj-comment',
             'placeholder' => get_string('comment', 'classjournal'),
             'aria-label' => get_string('comment', 'classjournal'),
+            'data-userid' => $student->id,
+            'data-lessonid' => $lesson->id,
         ]);
         echo html_writer::tag('td', $gradeinput . $commentinput);
     }

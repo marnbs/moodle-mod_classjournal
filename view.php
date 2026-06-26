@@ -56,47 +56,51 @@ $canviewall = has_capability('mod/classjournal:viewallgrades', $context);
 classjournal_ensure_grade_item($journal);
 classjournal_view($journal, $course, $cm, $context);
 
-if ($canmanage && $action === 'save' && confirm_sesskey()) {
-    $lessondatestring = required_param('lessondate', PARAM_RAW_TRIMMED);
-    $lessondate = strtotime($lessondatestring . ' 00:00:00');
-    if (!$lessondate) {
-        throw new moodle_exception('invaliddate', 'error');
-    }
+$lessonform = null;
+if ($canmanage && ($action === 'add' || ($action === 'edit' && $lessonid))) {
+    $editing = ($action === 'edit');
+    $formurl = new moodle_url($baseurl, ['action' => $action, 'lessonid' => $lessonid]);
+    $lessonform = new \mod_classjournal\form\lesson_form($formurl, [
+        'isedit' => $editing,
+        'courseid' => $course->id,
+        'defaultmaxgrade' => get_config('mod_classjournal', 'defaultmaxgrade') ?: 100,
+    ]);
 
-    $lessonname = required_param('name', PARAM_TEXT);
-    $description = optional_param('description', '', PARAM_RAW);
-    $maxgrade = required_param('maxgrade', PARAM_FLOAT);
-
-    if ($maxgrade <= 0) {
-        throw new moodle_exception('invalidgrade', 'classjournal', '', format_float(0));
-    }
-
-    if ($lessonid) {
-        $existing = $DB->get_record('classjournal_lessons', ['id' => $lessonid, 'journalid' => $journal->id], '*', MUST_EXIST);
-        $lesson = (object)[
-            'id' => $existing->id,
-            'journalid' => $journal->id,
-            'name' => $lessonname,
-            'description' => $description,
-            'lessondate' => $lessondate,
-            'maxgrade' => $maxgrade,
-            'timecreated' => $existing->timecreated,
-            'timemodified' => time(),
-        ];
-        $DB->update_record('classjournal_lessons', $lesson);
-        classjournal_grade_item_update($journal);
-    } else {
-        $repeatcount = optional_param('repeatcount', 1, PARAM_INT);
-        $repeatinterval = optional_param('repeatinterval', 1, PARAM_INT);
-        $repeatcount = max(1, min(100, $repeatcount));
-        $repeatinterval = max(1, min(52, $repeatinterval));
-
-        for ($i = 0; $i < $repeatcount; $i++) {
-            $currentdate = strtotime('+' . ($i * $repeatinterval) . ' weeks', $lessondate);
-            classjournal_create_lesson($journal, $lessonname, $description, $currentdate, $maxgrade);
+    if ($lessonform->is_cancelled()) {
+        redirect($baseurl);
+    } else if ($data = $lessonform->get_data()) {
+        $scaleid = ($data->gradetype === 'scale') ? (int)$data->scaleid : 0;
+        $maxgrade = (float)($data->maxgrade ?? 0);
+        if ($editing) {
+            classjournal_update_lesson(
+                $journal,
+                (int)$lessonid,
+                $data->name,
+                (string)$data->description,
+                (int)$data->lessondate,
+                $maxgrade,
+                $scaleid
+            );
+        } else {
+            $repeatcount = max(1, min(100, (int)($data->repeatcount ?? 1)));
+            $repeatinterval = max(1, min(52, (int)($data->repeatinterval ?? 1)));
+            for ($i = 0; $i < $repeatcount; $i++) {
+                $currentdate = strtotime('+' . ($i * $repeatinterval) . ' weeks', (int)$data->lessondate);
+                classjournal_create_lesson($journal, $data->name, (string)$data->description, $currentdate, $maxgrade, $scaleid);
+            }
         }
+        redirect($baseurl);
+    } else if ($editing) {
+        $existing = $DB->get_record('classjournal_lessons', ['id' => $lessonid, 'journalid' => $journal->id], '*', MUST_EXIST);
+        $lessonform->set_data([
+            'name' => $existing->name,
+            'lessondate' => (int)$existing->lessondate,
+            'gradetype' => $existing->scaleid ? 'scale' : 'point',
+            'maxgrade' => $existing->scaleid ? '' : $existing->maxgrade,
+            'scaleid' => (int)$existing->scaleid,
+            'description' => $existing->description,
+        ]);
     }
-    redirect($baseurl);
 }
 
 if ($canmanage && $action === 'delete' && $lessonid && confirm_sesskey()) {
@@ -154,57 +158,9 @@ echo $OUTPUT->header();
 echo $OUTPUT->heading(format_string($journal->name));
 echo format_module_intro('classjournal', $journal, $cm->id);
 
-if ($canmanage && ($action === 'add' || ($action === 'edit' && $lessonid))) {
-    $lesson = $lessonid
-        ? $DB->get_record('classjournal_lessons', ['id' => $lessonid, 'journalid' => $journal->id], '*', MUST_EXIST)
-        : (object)[
-            'id' => 0,
-            'name' => '',
-            'description' => '',
-            'lessondate' => time(),
-            'maxgrade' => get_config('mod_classjournal', 'defaultmaxgrade') ?: 100,
-        ];
-
-    $formurl = new moodle_url($baseurl, ['action' => 'save', 'lessonid' => $lesson->id, 'sesskey' => sesskey()]);
-    echo html_writer::start_tag('form', ['method' => 'post', 'action' => $formurl]);
-    echo html_writer::start_tag('fieldset');
-    echo html_writer::tag('legend', get_string($lesson->id ? 'editlesson' : 'addlesson', 'classjournal'));
-    echo html_writer::label(get_string('lessonname', 'classjournal'), 'lesson-name');
-    echo html_writer::empty_tag('input', [
-        'id' => 'lesson-name', 'name' => 'name', 'type' => 'text',
-        'required' => 'required', 'value' => s($lesson->name), 'class' => 'form-control',
-    ]);
-    echo html_writer::label(get_string('lessondate', 'classjournal'), 'lesson-date', false, ['class' => 'mt-3']);
-    echo html_writer::empty_tag('input', [
-        'id' => 'lesson-date', 'name' => 'lessondate', 'type' => 'date', 'required' => 'required',
-        'value' => date('Y-m-d', $lesson->lessondate), 'class' => 'form-control',
-    ]);
-    echo html_writer::label(get_string('maxgrade', 'classjournal'), 'lesson-maxgrade', false, ['class' => 'mt-3']);
-    echo html_writer::empty_tag('input', [
-        'id' => 'lesson-maxgrade', 'name' => 'maxgrade', 'type' => 'number', 'step' => '0.01',
-        'min' => '0.01', 'required' => 'required', 'value' => s($lesson->maxgrade), 'class' => 'form-control',
-    ]);
-    echo html_writer::label(get_string('description', 'classjournal'), 'lesson-description', false, ['class' => 'mt-3']);
-    echo html_writer::tag('textarea', s($lesson->description), [
-        'id' => 'lesson-description', 'name' => 'description', 'class' => 'form-control', 'rows' => 4,
-    ]);
-    if (!$lesson->id) {
-        echo html_writer::label(get_string('repeatcount', 'classjournal'), 'lesson-repeatcount', false, ['class' => 'mt-3']);
-        echo html_writer::empty_tag('input', [
-            'id' => 'lesson-repeatcount', 'name' => 'repeatcount', 'type' => 'number',
-            'min' => '1', 'max' => '100', 'value' => 1, 'class' => 'form-control',
-        ]);
-        echo html_writer::label(get_string('repeatinterval', 'classjournal'), 'lesson-repeatinterval', false, ['class' => 'mt-3']);
-        echo html_writer::empty_tag('input', [
-            'id' => 'lesson-repeatinterval', 'name' => 'repeatinterval', 'type' => 'number',
-            'min' => '1', 'max' => '52', 'value' => 1, 'class' => 'form-control',
-        ]);
-    }
-    echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
-    echo html_writer::tag('button', get_string('savechanges'), ['type' => 'submit', 'class' => 'btn btn-primary mt-3']);
-    echo html_writer::link($baseurl, get_string('cancel'), ['class' => 'btn btn-secondary mt-3 ml-2']);
-    echo html_writer::end_tag('fieldset');
-    echo html_writer::end_tag('form');
+if ($lessonform) {
+    echo $OUTPUT->heading(get_string($action === 'edit' ? 'editlesson' : 'addlesson', 'classjournal'), 3);
+    $lessonform->display();
     echo $OUTPUT->footer();
     exit;
 }
@@ -231,16 +187,6 @@ if ($dateto !== '') {
     }
 }
 $wheresql = implode(' AND ', $where);
-$lessoncount = $DB->count_records_select('classjournal_lessons', $wheresql, $params);
-$lessons = $DB->get_records_select(
-    'classjournal_lessons',
-    $wheresql,
-    $params,
-    'lessondate ASC, id ASC',
-    '*',
-    $page * $perpage,
-    $perpage
-);
 
 if ($canmanage) {
     echo html_writer::div(
@@ -302,72 +248,60 @@ echo html_writer::div(
 echo html_writer::end_div();
 echo html_writer::end_tag('form');
 
-if (!$lessons) {
-    echo $OUTPUT->notification(get_string('nolessons', 'classjournal'), 'info');
-    echo $OUTPUT->footer();
-    exit;
-}
-
-$table = new html_table();
-$table->head = [];
+$table = new \mod_classjournal\output\lessons_table('classjournal-lessons-' . $cm->id, $context, $canmanage, $baseurl);
+$columns = [];
+$headers = [];
 if ($canmanage) {
-    $table->head[] = '';
+    $columns[] = 'select';
+    $headers[] = '';
 }
-$table->head = array_merge($table->head, [
+$columns = array_merge($columns, ['name', 'lessondate', 'maxgrade', 'description']);
+$headers = array_merge($headers, [
     get_string('lessonname', 'classjournal'),
     get_string('lessondate', 'classjournal'),
     get_string('maxgrade', 'classjournal'),
     get_string('description', 'classjournal'),
 ]);
 if ($canmanage) {
-    $table->head[] = get_string('actions');
+    $columns[] = 'actions';
+    $headers[] = get_string('actions');
 }
+$table->define_columns($columns);
+$table->define_headers($headers);
+$table->define_baseurl(new moodle_url($baseurl, [
+    'q' => $q,
+    'datefrom' => $datefrom,
+    'dateto' => $dateto,
+    'perpage' => $perpage,
+]));
+$table->no_sorting('select');
+$table->no_sorting('actions');
+$table->no_sorting('description');
+$table->sortable(true, 'lessondate', SORT_ASC);
+$table->collapsible(false);
+$table->set_attribute('class', 'generaltable table table-striped');
+$table->set_sql('*', '{classjournal_lessons}', $wheresql, $params);
 
-foreach ($lessons as $lesson) {
-    $row = [];
-    if ($canmanage) {
-        $row[] = html_writer::checkbox('selectedlessons[]', $lesson->id, false, '', [
-            'aria-label' => get_string('selectlesson', 'classjournal', format_string($lesson->name)),
-        ]);
-    }
-    $row = array_merge($row, [
-        format_string($lesson->name),
-        userdate($lesson->lessondate, get_string('strftimedate')),
-        format_float($lesson->maxgrade),
-        format_text($lesson->description, FORMAT_PLAIN, ['context' => $context]),
-    ]);
-    if ($canmanage) {
-        $editlink = html_writer::link(
-            new moodle_url($baseurl, ['action' => 'edit', 'lessonid' => $lesson->id]),
-            get_string('edit')
-        );
-        $deletelink = html_writer::link(
-            new moodle_url($baseurl, ['action' => 'delete', 'lessonid' => $lesson->id, 'sesskey' => sesskey()]),
-            get_string('delete')
-        );
-        $row[] = $editlink . ' | ' . $deletelink;
-    }
-    $table->data[] = $row;
-}
 if ($canmanage) {
     echo html_writer::start_tag('form', ['method' => 'post', 'action' => new moodle_url($baseurl, ['action' => 'bulkdelete'])]);
     echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
 }
-echo html_writer::table($table);
+$table->out($perpage, false);
 if ($canmanage) {
     echo html_writer::tag('button', get_string('deleteselectedlessons', 'classjournal'), [
         'type' => 'submit', 'class' => 'btn btn-danger mb-3',
     ]);
     echo html_writer::end_tag('form');
 }
-echo $OUTPUT->paging_bar($lessoncount, $page, $perpage, new moodle_url($baseurl, [
-    'q' => $q,
-    'datefrom' => $datefrom,
-    'dateto' => $dateto,
-    'perpage' => $perpage,
-]));
 
-if (!$canviewall && $journal->showallgrades) {
+// Students see their grades across every lesson, independent of the list paging above.
+$lessons = $canviewall ? [] : $DB->get_records(
+    'classjournal_lessons',
+    ['journalid' => $journal->id],
+    'lessondate ASC, id ASC'
+);
+
+if (!$canviewall && $journal->showallgrades && $lessons) {
     $students = classjournal_get_student_users(
         $context,
         'u.id, u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic, u.middlename, u.alternatename',
@@ -394,7 +328,7 @@ if (!$canviewall && $journal->showallgrades) {
         foreach ($lessons as $lesson) {
             $grade = $grades[$student->id][$lesson->id] ?? null;
             $gradesbylesson[$lesson->id] = $grade;
-            $row[] = $grade === null ? '-' : format_float($grade) . ' / ' . format_float($lesson->maxgrade);
+            $row[] = classjournal_format_grade($lesson, $grade === null ? null : (float)$grade);
         }
         $total = classjournal_calculate_total($journal, $lessons, $gradesbylesson);
         $row[] = $total === null ? '-' : format_float($total);
@@ -403,7 +337,7 @@ if (!$canviewall && $journal->showallgrades) {
     echo html_writer::table($alltable);
 }
 
-if (!$canviewall && !$journal->showallgrades) {
+if (!$canviewall && !$journal->showallgrades && $lessons) {
     [$insql, $params] = $DB->get_in_or_equal(array_keys($lessons), SQL_PARAMS_NAMED, 'lessonid');
     $params['userid'] = $USER->id;
     $grades = $DB->get_records_select('classjournal_grades', "lessonid $insql AND userid = :userid", $params);
@@ -431,7 +365,7 @@ if (!$canviewall && !$journal->showallgrades) {
         }
         $studenttable->data[] = [
             format_string($lesson->name),
-            $grade === null ? '-' : format_float($grade) . ' / ' . format_float($lesson->maxgrade),
+            classjournal_format_grade($lesson, $grade === null ? null : (float)$grade),
             s($comment),
         ];
     }

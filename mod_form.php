@@ -66,6 +66,10 @@ class mod_classjournal_mod_form extends moodleform_mod {
         $mform->setDefault('showallgrades', 0);
         $mform->addHelpButton('showallgrades', 'showallgrades', 'classjournal');
 
+        $mform->addElement('advcheckbox', 'calendarevents', get_string('calendarevents', 'classjournal'));
+        $mform->setDefault('calendarevents', get_config('mod_classjournal', 'calendarevents'));
+        $mform->addHelpButton('calendarevents', 'calendarevents', 'classjournal');
+
         $this->standard_coursemodule_elements();
         $this->add_action_buttons();
     }

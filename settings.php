@@ -32,4 +32,11 @@ if ($ADMIN->fulltree) {
         100,
         PARAM_FLOAT
     ));
+
+    $settings->add(new admin_setting_configcheckbox(
+        'mod_classjournal/calendarevents',
+        get_string('calendarevents', 'classjournal'),
+        get_string('calendarevents_desc', 'classjournal'),
+        1
+    ));
 }

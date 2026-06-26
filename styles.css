@@ -1,0 +1,52 @@
+/* Grade entry grid: sticky header and first column, colour indication. */
+
+#cj-grade-grid {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+#cj-grade-grid thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--body-bg, #fff);
+}
+
+#cj-grade-grid tbody th.cj-user,
+#cj-grade-grid thead th.cj-user {
+    position: sticky;
+    left: 0;
+    background: var(--body-bg, #fff);
+    z-index: 1;
+}
+
+#cj-grade-grid thead th.cj-user {
+    z-index: 3;
+}
+
+#cj-grade-grid .cj-grade.cj-low {
+    background: #fde8e8;
+}
+
+#cj-grade-grid .cj-grade.cj-ok {
+    background: #e8f5e9;
+}
+
+#cj-grade-grid .cj-grade.cj-empty {
+    background: #fff;
+}
+
+#cj-grade-grid td.cj-saved {
+    box-shadow: inset 0 0 0 2px #28a745;
+}
+
+#cj-grade-grid td.cj-saveerror {
+    box-shadow: inset 0 0 0 2px #dc3545;
+}
+
+#cj-grade-grid .cj-fill {
+    margin-top: 0.25rem;
+    padding: 0 0.25rem;
+    font-size: 0.75rem;
+    line-height: 1.4;
+}

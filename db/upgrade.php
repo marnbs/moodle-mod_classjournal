@@ -99,5 +99,34 @@ function xmldb_classjournal_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026051507, 'classjournal');
     }
 
+    if ($oldversion < 2026062600) {
+        $dbman = $DB->get_manager();
+        $table = new xmldb_table('classjournal_lessons');
+        $scaleid = new xmldb_field('scaleid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'maxgrade');
+        if (!$dbman->field_exists($table, $scaleid)) {
+            $dbman->add_field($table, $scaleid);
+        }
+
+        upgrade_mod_savepoint(true, 2026062600, 'classjournal');
+    }
+
+    if ($oldversion < 2026062601) {
+        $dbman = $DB->get_manager();
+
+        $journal = new xmldb_table('classjournal');
+        $calendarevents = new xmldb_field('calendarevents', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '1', 'showallgrades');
+        if (!$dbman->field_exists($journal, $calendarevents)) {
+            $dbman->add_field($journal, $calendarevents);
+        }
+
+        $lessons = new xmldb_table('classjournal_lessons');
+        $eventid = new xmldb_field('eventid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'scaleid');
+        if (!$dbman->field_exists($lessons, $eventid)) {
+            $dbman->add_field($lessons, $eventid);
+        }
+
+        upgrade_mod_savepoint(true, 2026062601, 'classjournal');
+    }
+
     return true;
 }

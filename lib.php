@@ -82,6 +82,7 @@ function classjournal_add_instance($data, $mform = null) {
     $data->timemodified = $data->timecreated;
     $data->showallgrades = empty($data->showallgrades) ? 0 : 1;
     $data->emptygradeszero = empty($data->emptygradeszero) ? 0 : 1;
+    $data->calendarevents = empty($data->calendarevents) ? 0 : 1;
     $data->gradebookmax = classjournal_normalise_gradebookmax($data->gradebookmax ?? 100);
 
     $id = $DB->insert_record('classjournal', $data);
@@ -94,11 +95,16 @@ function classjournal_add_instance($data, $mform = null) {
 /**
  * Create one lesson and its gradebook item.
  *
+ * When $scaleid is greater than zero the lesson is graded on a Moodle scale and
+ * $maxgrade is forced to the number of scale options, so the percentage maths
+ * used by the aggregate keeps working unchanged.
+ *
  * @param stdClass $journal
  * @param string $name
  * @param string $description
  * @param int $lessondate
  * @param float $maxgrade
+ * @param int $scaleid
  * @return stdClass
  */
 function classjournal_create_lesson(
@@ -106,10 +112,14 @@ function classjournal_create_lesson(
     string $name,
     string $description,
     int $lessondate,
-    float $maxgrade
+    float $maxgrade,
+    int $scaleid = 0
 ): stdClass {
     global $DB;
 
+    if ($scaleid > 0) {
+        $maxgrade = (float)classjournal_scale_item_count($scaleid);
+    }
     if ($maxgrade <= 0) {
         throw new moodle_exception('invalidgrade', 'classjournal', '', format_float($maxgrade));
     }
@@ -121,13 +131,183 @@ function classjournal_create_lesson(
         'description' => $description,
         'lessondate' => $lessondate,
         'maxgrade' => $maxgrade,
+        'scaleid' => $scaleid,
+        'eventid' => 0,
         'timecreated' => $now,
         'timemodified' => $now,
     ];
     $lesson->id = $DB->insert_record('classjournal_lessons', $lesson);
     classjournal_grade_item_update($journal);
+    classjournal_sync_lesson_event($journal, $lesson);
 
     return $lesson;
+}
+
+/**
+ * Update an existing lesson's editable fields.
+ *
+ * @param stdClass $journal
+ * @param int $lessonid
+ * @param string $name
+ * @param string $description
+ * @param int $lessondate
+ * @param float $maxgrade
+ * @param int $scaleid
+ * @return stdClass the updated lesson record
+ */
+function classjournal_update_lesson(
+    stdClass $journal,
+    int $lessonid,
+    string $name,
+    string $description,
+    int $lessondate,
+    float $maxgrade,
+    int $scaleid = 0
+): stdClass {
+    global $DB;
+
+    $existing = $DB->get_record('classjournal_lessons', ['id' => $lessonid, 'journalid' => $journal->id], '*', MUST_EXIST);
+
+    if ($scaleid > 0) {
+        $maxgrade = (float)classjournal_scale_item_count($scaleid);
+    }
+    if ($maxgrade <= 0) {
+        throw new moodle_exception('invalidgrade', 'classjournal', '', format_float($maxgrade));
+    }
+
+    $existing->name = $name;
+    $existing->description = $description;
+    $existing->lessondate = $lessondate;
+    $existing->maxgrade = $maxgrade;
+    $existing->scaleid = $scaleid;
+    $existing->timemodified = time();
+    $DB->update_record('classjournal_lessons', $existing);
+    classjournal_grade_item_update($journal);
+    classjournal_sync_lesson_event($journal, $existing);
+
+    return $existing;
+}
+
+/**
+ * Create, update or remove the calendar event for a lesson to match the journal setting.
+ *
+ * @param stdClass $journal
+ * @param stdClass $lesson
+ * @return void
+ */
+function classjournal_sync_lesson_event(stdClass $journal, stdClass $lesson): void {
+    global $CFG, $DB;
+    require_once($CFG->dirroot . '/calendar/lib.php');
+
+    $eventid = (int)($lesson->eventid ?? 0);
+
+    if (empty($journal->calendarevents)) {
+        if ($eventid) {
+            classjournal_delete_lesson_event($eventid);
+            $DB->set_field('classjournal_lessons', 'eventid', 0, ['id' => $lesson->id]);
+        }
+        return;
+    }
+
+    $eventdata = (object)[
+        'name' => format_string($lesson->name),
+        'description' => '',
+        'format' => FORMAT_PLAIN,
+        'courseid' => $journal->course,
+        'groupid' => 0,
+        'userid' => 0,
+        'eventtype' => 'course',
+        'timestart' => (int)$lesson->lessondate,
+        'timeduration' => 0,
+        'visible' => 1,
+    ];
+
+    if ($eventid && $DB->record_exists('event', ['id' => $eventid])) {
+        $event = \calendar_event::load($eventid);
+        $event->update($eventdata, false);
+    } else {
+        $event = \calendar_event::create($eventdata, false);
+        if ($event) {
+            $DB->set_field('classjournal_lessons', 'eventid', (int)$event->id, ['id' => $lesson->id]);
+        }
+    }
+}
+
+/**
+ * Delete a lesson calendar event if it still exists.
+ *
+ * @param int $eventid
+ * @return void
+ */
+function classjournal_delete_lesson_event(int $eventid): void {
+    global $CFG, $DB;
+    require_once($CFG->dirroot . '/calendar/lib.php');
+
+    if ($eventid && $DB->record_exists('event', ['id' => $eventid])) {
+        $event = \calendar_event::load($eventid);
+        $event->delete();
+    }
+}
+
+/**
+ * Whether a lesson is graded on a Moodle scale rather than numeric points.
+ *
+ * @param stdClass $lesson
+ * @return bool
+ */
+function classjournal_is_scale_lesson(stdClass $lesson): bool {
+    return !empty($lesson->scaleid);
+}
+
+/**
+ * Ordered scale option labels keyed by their 1-based index.
+ *
+ * @param int $scaleid
+ * @return array
+ */
+function classjournal_get_scale_values(int $scaleid): array {
+    global $DB;
+
+    $scale = $DB->get_record('scale', ['id' => $scaleid]);
+    if (!$scale) {
+        return [];
+    }
+    $items = explode(',', $scale->scale);
+    $values = [];
+    foreach ($items as $index => $label) {
+        $values[$index + 1] = trim($label);
+    }
+
+    return $values;
+}
+
+/**
+ * Number of options in a scale.
+ *
+ * @param int $scaleid
+ * @return int
+ */
+function classjournal_scale_item_count(int $scaleid): int {
+    return count(classjournal_get_scale_values($scaleid));
+}
+
+/**
+ * Format a stored grade for display, honouring scale lessons.
+ *
+ * @param stdClass $lesson
+ * @param float|null $grade
+ * @return string
+ */
+function classjournal_format_grade(stdClass $lesson, ?float $grade): string {
+    if ($grade === null) {
+        return '-';
+    }
+    if (classjournal_is_scale_lesson($lesson)) {
+        $values = classjournal_get_scale_values((int)$lesson->scaleid);
+        return $values[(int)round($grade)] ?? '-';
+    }
+
+    return format_float($grade) . ' / ' . format_float($lesson->maxgrade);
 }
 
 /**
@@ -144,10 +324,18 @@ function classjournal_update_instance($data, $mform = null) {
     $data->timemodified = time();
     $data->showallgrades = empty($data->showallgrades) ? 0 : 1;
     $data->emptygradeszero = empty($data->emptygradeszero) ? 0 : 1;
+    $data->calendarevents = empty($data->calendarevents) ? 0 : 1;
     $data->gradebookmax = classjournal_normalise_gradebookmax($data->gradebookmax ?? 100);
 
     $result = $DB->update_record('classjournal', $data);
     classjournal_grade_item_update($data);
+
+    // Apply the calendar toggle to every existing lesson.
+    $journal = $DB->get_record('classjournal', ['id' => $data->id], '*', MUST_EXIST);
+    $lessons = $DB->get_records('classjournal_lessons', ['journalid' => $journal->id]);
+    foreach ($lessons as $lesson) {
+        classjournal_sync_lesson_event($journal, $lesson);
+    }
 
     return $result;
 }
@@ -216,6 +404,104 @@ function classjournal_set_lesson_grade(stdClass $lesson, int $userid, ?float $gr
 }
 
 /**
+ * Save many lesson grades at once and sync the gradebook a single time.
+ *
+ * Existing grades are loaded in one query, unchanged cells are skipped, and
+ * empty cells with no prior grade are never written. The aggregate Gradebook
+ * item is recalculated once at the end instead of once per cell.
+ *
+ * @param stdClass $journal
+ * @param array $lessons lesson records (must expose id and maxgrade) keyed or listed
+ * @param array $changes list of objects with lessonid, userid, grade (float|null), comment (string)
+ * @return int number of grade rows created or updated
+ */
+function classjournal_set_lesson_grades(stdClass $journal, array $lessons, array $changes): int {
+    global $DB;
+
+    if (!$changes) {
+        return 0;
+    }
+
+    $lessonmax = [];
+    foreach ($lessons as $lesson) {
+        $lessonmax[(int)$lesson->id] = (float)$lesson->maxgrade;
+    }
+
+    // Validate every grade before touching the database so the save is all-or-nothing.
+    foreach ($changes as $change) {
+        if ($change->grade === null || !isset($lessonmax[(int)$change->lessonid])) {
+            continue;
+        }
+        $max = $lessonmax[(int)$change->lessonid];
+        if ($change->grade < 0 || $change->grade > $max) {
+            throw new moodle_exception('invalidgrade', 'classjournal', '', format_float($max));
+        }
+    }
+
+    if (!$lessonmax) {
+        return 0;
+    }
+
+    [$insql, $params] = $DB->get_in_or_equal(array_keys($lessonmax), SQL_PARAMS_NAMED, 'lessonid');
+    $existing = $DB->get_records_select('classjournal_grades', "lessonid $insql", $params);
+    $bykey = [];
+    foreach ($existing as $record) {
+        $bykey[$record->lessonid . ':' . $record->userid] = $record;
+    }
+
+    $now = time();
+    $written = 0;
+    $touchedusers = [];
+
+    foreach ($changes as $change) {
+        $lessonid = (int)$change->lessonid;
+        $userid = (int)$change->userid;
+        if (!isset($lessonmax[$lessonid])) {
+            continue;
+        }
+        $grade = $change->grade;
+        // A null comment means "leave the existing comment as is" (e.g. a grades-only import).
+        $hascomment = property_exists($change, 'comment') && $change->comment !== null;
+        $comment = $hascomment ? (string)$change->comment : null;
+        $record = $bykey[$lessonid . ':' . $userid] ?? null;
+
+        if ($record) {
+            $newcomment = $hascomment ? $comment : (string)$record->comment;
+            $gradeunchanged = ($record->grade === null && $grade === null) ||
+                ($record->grade !== null && $grade !== null && abs((float)$record->grade - (float)$grade) < 0.00001);
+            if ($gradeunchanged && (string)$record->comment === $newcomment) {
+                continue;
+            }
+            $record->grade = $grade;
+            $record->comment = $newcomment;
+            $record->timemodified = $now;
+            $DB->update_record('classjournal_grades', $record);
+        } else {
+            // Never create an empty row for a cell with no grade and no comment.
+            if ($grade === null && ($comment === null || $comment === '')) {
+                continue;
+            }
+            $DB->insert_record('classjournal_grades', (object)[
+                'lessonid' => $lessonid,
+                'userid' => $userid,
+                'grade' => $grade,
+                'comment' => (string)$comment,
+                'timemodified' => $now,
+            ]);
+        }
+
+        $touchedusers[$userid] = true;
+        $written++;
+    }
+
+    if ($touchedusers) {
+        classjournal_grade_item_update($journal);
+    }
+
+    return $written;
+}
+
+/**
  * Delete a lesson, its grades, and its gradebook item.
  *
  * @param stdClass $lesson
@@ -236,6 +522,9 @@ function classjournal_delete_lesson(stdClass $lesson, bool $deletegrades = true)
 
     if ($deletegrades) {
         $DB->delete_records('classjournal_grades', ['lessonid' => $lesson->id]);
+    }
+    if (!empty($lesson->eventid)) {
+        classjournal_delete_lesson_event((int)$lesson->eventid);
     }
     $DB->delete_records('classjournal_lessons', ['id' => $lesson->id]);
     $grades = classjournal_get_aggregate_grades($journal);
