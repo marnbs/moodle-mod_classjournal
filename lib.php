@@ -36,6 +36,8 @@ function classjournal_supports($feature) {
         case FEATURE_COMPLETION_TRACKS_VIEWS:
         case FEATURE_BACKUP_MOODLE2:
             return true;
+        case FEATURE_MOD_PURPOSE:
+            return MOD_PURPOSE_ASSESSMENT;
         default:
             return null;
     }
