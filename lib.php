@@ -936,7 +936,7 @@ function classjournal_format_lesson_time(stdClass $lesson): string {
     if (!isset($lesson->starttime)) {
         return '';
     }
-    $format = static function(int $seconds): string {
+    $format = static function (int $seconds): string {
         return sprintf('%02d:%02d', intdiv($seconds, 3600), intdiv($seconds % 3600, 60));
     };
     $span = $format((int)$lesson->starttime);

@@ -418,7 +418,7 @@ if (!$canviewall && !$journal->showallgrades && $lessons) {
 
     // Summary cards: journal total with a progress bar and the number of graded lessons.
     $grademax = classjournal_get_aggregate_grademax($journal);
-    $gradedcount = count(array_filter($gradesbylesson, static function($grade) {
+    $gradedcount = count(array_filter($gradesbylesson, static function ($grade) {
         return $grade !== null;
     }));
     $percent = ($total !== null && $grademax > 0) ? max(0, min(100, round($total / $grademax * 100))) : 0;
