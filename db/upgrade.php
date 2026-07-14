@@ -128,5 +128,22 @@ function xmldb_classjournal_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026062601, 'classjournal');
     }
 
+    if ($oldversion < 2026071401) {
+        $dbman = $DB->get_manager();
+        $lessons = new xmldb_table('classjournal_lessons');
+
+        $starttime = new xmldb_field('starttime', XMLDB_TYPE_INTEGER, '10', null, null, null, null, 'lessondate');
+        if (!$dbman->field_exists($lessons, $starttime)) {
+            $dbman->add_field($lessons, $starttime);
+        }
+
+        $endtime = new xmldb_field('endtime', XMLDB_TYPE_INTEGER, '10', null, null, null, null, 'starttime');
+        if (!$dbman->field_exists($lessons, $endtime)) {
+            $dbman->add_field($lessons, $endtime);
+        }
+
+        upgrade_mod_savepoint(true, 2026071401, 'classjournal');
+    }
+
     return true;
 }

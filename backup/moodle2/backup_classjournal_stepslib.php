@@ -40,12 +40,13 @@ class backup_classjournal_activity_structure_step extends backup_activity_struct
         // Define the root element describing the classjournal instance.
         $classjournal = new backup_nested_element('classjournal', ['id'], [
             'name', 'intro', 'introformat', 'aggregation', 'emptygradeszero',
-            'gradebookmax', 'showallgrades', 'timecreated', 'timemodified',
+            'gradebookmax', 'showallgrades', 'calendarevents', 'timecreated', 'timemodified',
         ]);
 
         $lessons = new backup_nested_element('lessons');
         $lesson = new backup_nested_element('lesson', ['id'], [
-            'name', 'description', 'lessondate', 'maxgrade', 'timecreated', 'timemodified',
+            'name', 'description', 'lessondate', 'starttime', 'endtime',
+            'maxgrade', 'scaleid', 'timecreated', 'timemodified',
         ]);
 
         $grades = new backup_nested_element('grades');

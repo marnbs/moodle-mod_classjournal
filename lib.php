@@ -105,6 +105,8 @@ function classjournal_add_instance($data, $mform = null) {
  * @param int $lessondate
  * @param float $maxgrade
  * @param int $scaleid
+ * @param int|null $starttime Start time as seconds from midnight, null when no time is set.
+ * @param int|null $endtime End time as seconds from midnight, null when no time is set.
  * @return stdClass
  */
 function classjournal_create_lesson(
@@ -113,7 +115,9 @@ function classjournal_create_lesson(
     string $description,
     int $lessondate,
     float $maxgrade,
-    int $scaleid = 0
+    int $scaleid = 0,
+    ?int $starttime = null,
+    ?int $endtime = null
 ): stdClass {
     global $DB;
 
@@ -130,6 +134,8 @@ function classjournal_create_lesson(
         'name' => $name,
         'description' => $description,
         'lessondate' => $lessondate,
+        'starttime' => $starttime,
+        'endtime' => $endtime,
         'maxgrade' => $maxgrade,
         'scaleid' => $scaleid,
         'eventid' => 0,
@@ -153,6 +159,8 @@ function classjournal_create_lesson(
  * @param int $lessondate
  * @param float $maxgrade
  * @param int $scaleid
+ * @param int|null $starttime Start time as seconds from midnight, null when no time is set.
+ * @param int|null $endtime End time as seconds from midnight, null when no time is set.
  * @return stdClass the updated lesson record
  */
 function classjournal_update_lesson(
@@ -162,7 +170,9 @@ function classjournal_update_lesson(
     string $description,
     int $lessondate,
     float $maxgrade,
-    int $scaleid = 0
+    int $scaleid = 0,
+    ?int $starttime = null,
+    ?int $endtime = null
 ): stdClass {
     global $DB;
 
@@ -178,6 +188,8 @@ function classjournal_update_lesson(
     $existing->name = $name;
     $existing->description = $description;
     $existing->lessondate = $lessondate;
+    $existing->starttime = $starttime;
+    $existing->endtime = $endtime;
     $existing->maxgrade = $maxgrade;
     $existing->scaleid = $scaleid;
     $existing->timemodified = time();
@@ -209,6 +221,15 @@ function classjournal_sync_lesson_event(stdClass $journal, stdClass $lesson): vo
         return;
     }
 
+    $timestart = (int)$lesson->lessondate;
+    $timeduration = 0;
+    if (isset($lesson->starttime)) {
+        $timestart += (int)$lesson->starttime;
+        if (isset($lesson->endtime) && $lesson->endtime > $lesson->starttime) {
+            $timeduration = (int)$lesson->endtime - (int)$lesson->starttime;
+        }
+    }
+
     $eventdata = (object)[
         'name' => format_string($lesson->name),
         'description' => '',
@@ -217,8 +238,8 @@ function classjournal_sync_lesson_event(stdClass $journal, stdClass $lesson): vo
         'groupid' => 0,
         'userid' => 0,
         'eventtype' => 'course',
-        'timestart' => (int)$lesson->lessondate,
-        'timeduration' => 0,
+        'timestart' => $timestart,
+        'timeduration' => $timeduration,
         'visible' => 1,
     ];
 
@@ -873,4 +894,54 @@ function classjournal_get_aggregation_description(stdClass $journal): string {
     return empty($journal->emptygradeszero)
         ? get_string('aggregationsumdescription', 'classjournal', $grademax)
         : get_string('aggregationsumzerodescription', 'classjournal', $grademax);
+}
+
+/**
+ * Timestamp range for a lesson list view filter, in the current user's timezone.
+ *
+ * @param string $view One of all, past, month, week, day.
+ * @return array [from, to] timestamps; null means unbounded.
+ */
+function classjournal_view_range(string $view): array {
+    $now = time();
+    $today = usergetmidnight($now);
+    switch ($view) {
+        case 'past':
+            return [null, $now];
+        case 'month':
+            $d = usergetdate($today);
+            $from = make_timestamp($d['year'], $d['mon'], 1);
+            $to = ($d['mon'] === 12)
+                ? make_timestamp($d['year'] + 1, 1, 1) - 1
+                : make_timestamp($d['year'], $d['mon'] + 1, 1) - 1;
+            return [$from, $to];
+        case 'week':
+            $d = usergetdate($today);
+            $from = $today - ((($d['wday'] + 6) % 7) * DAYSECS);
+            return [$from, $from + WEEKSECS - 1];
+        case 'day':
+            return [$today, $today + DAYSECS - 1];
+        default:
+            return [null, null];
+    }
+}
+
+/**
+ * Human-readable lesson time span, e.g. "16:00 - 18:00", or '' when no time is set.
+ *
+ * @param stdClass $lesson
+ * @return string
+ */
+function classjournal_format_lesson_time(stdClass $lesson): string {
+    if (!isset($lesson->starttime)) {
+        return '';
+    }
+    $format = static function(int $seconds): string {
+        return sprintf('%02d:%02d', intdiv($seconds, 3600), intdiv($seconds % 3600, 60));
+    };
+    $span = $format((int)$lesson->starttime);
+    if (isset($lesson->endtime)) {
+        $span .= ' - ' . $format((int)$lesson->endtime);
+    }
+    return $span;
 }

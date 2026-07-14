@@ -15,17 +15,36 @@
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Version details for mod_classjournal.
+ * Bulk lesson date change form for mod_classjournal.
  *
  * @package    mod_classjournal
  * @copyright  2026 Konstantin K <rbk112v@gmail.com>
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+namespace mod_classjournal\form;
+
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->component = 'mod_classjournal';
-$plugin->version = 2026071403;
-$plugin->requires = 2022112800; // Moodle 4.1.
-$plugin->maturity = MATURITY_STABLE;
-$plugin->release = '1.0.0';
+global $CFG;
+require_once($CFG->libdir . '/formslib.php');
+
+/**
+ * Sets a new date for the selected lessons.
+ *
+ * Expects customdata: lessoncount (int).
+ */
+class bulk_date_form extends \moodleform {
+    /**
+     * Form definition.
+     */
+    protected function definition() {
+        $mform = $this->_form;
+        $lessoncount = (int)($this->_customdata['lessoncount'] ?? 0);
+
+        $mform->addElement('static', 'info', '', get_string('changedateinfo', 'classjournal', $lessoncount));
+        $mform->addElement('date_selector', 'lessondate', get_string('lessondate', 'classjournal'));
+
+        $this->add_action_buttons(true, get_string('savechanges'));
+    }
+}

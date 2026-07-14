@@ -87,7 +87,17 @@ class lessons_table extends \table_sql {
      * @return string
      */
     public function col_lessondate($row): string {
-        return userdate($row->lessondate, get_string('strftimedate'));
+        return userdate($row->lessondate, '%d.%m.%y (%a)');
+    }
+
+    /**
+     * Lesson time span, empty when no time is set.
+     *
+     * @param \stdClass $row
+     * @return string
+     */
+    public function col_lessontime($row): string {
+        return classjournal_format_lesson_time($row);
     }
 
     /**
@@ -113,20 +123,43 @@ class lessons_table extends \table_sql {
     }
 
     /**
-     * Edit and delete actions.
+     * Grade, edit and delete action icons.
      *
      * @param \stdClass $row
      * @return string
      */
     public function col_actions($row): string {
-        $edit = \html_writer::link(
+        global $OUTPUT;
+
+        $day = date('Y-m-d', (int)$row->lessondate);
+        $grade = $OUTPUT->action_icon(
+            new \moodle_url('/mod/classjournal/grades.php', [
+                'id' => $this->context->instanceid, 'datefrom' => $day, 'dateto' => $day,
+            ]),
+            new \pix_icon('t/grades', get_string('gradelesson', 'classjournal'))
+        );
+        $edit = $OUTPUT->action_icon(
             new \moodle_url($this->actionbase, ['action' => 'edit', 'lessonid' => $row->id]),
-            get_string('edit')
+            new \pix_icon('t/edit', get_string('editlesson', 'classjournal'))
         );
-        $delete = \html_writer::link(
-            new \moodle_url($this->actionbase, ['action' => 'delete', 'lessonid' => $row->id, 'sesskey' => sesskey()]),
-            get_string('delete')
+        // Confirm deletion in a modal (core handles the data-confirmation attributes);
+        // without JavaScript the link falls back to the confirmation page.
+        $deleteurl = new \moodle_url($this->actionbase, ['action' => 'delete', 'lessonid' => $row->id, 'sesskey' => sesskey()]);
+        $delete = $OUTPUT->action_icon(
+            $deleteurl,
+            new \pix_icon('t/delete', get_string('deletelesson', 'classjournal')),
+            null,
+            [
+                'data-confirmation' => 'modal',
+                'data-confirmation-type' => 'delete',
+                'data-confirmation-title-str' => json_encode(['delete', 'core']),
+                'data-confirmation-content-str' => json_encode(
+                    ['confirmdeletelesson', 'classjournal', format_string($row->name)]
+                ),
+                'data-confirmation-yes-button-str' => json_encode(['delete', 'core']),
+                'data-confirmation-destination' => (new \moodle_url($deleteurl, ['confirm' => 1]))->out(false),
+            ]
         );
-        return $edit . ' | ' . $delete;
+        return \html_writer::span($grade . $edit . $delete, 'cj-actions');
     }
 }

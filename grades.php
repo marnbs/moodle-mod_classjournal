@@ -27,6 +27,7 @@ require_once(__DIR__ . '/lib.php');
 
 $id = required_param('id', PARAM_INT);
 $q = optional_param('q', '', PARAM_TEXT);
+$view = optional_param('view', 'all', PARAM_ALPHA);
 $datefrom = optional_param('datefrom', '', PARAM_RAW_TRIMMED);
 $dateto = optional_param('dateto', '', PARAM_RAW_TRIMMED);
 $page = optional_param('page', 0, PARAM_INT);
@@ -43,6 +44,7 @@ require_capability('mod/classjournal:grade', $context);
 $urlparams = [
     'id' => $cm->id,
     'q' => $q,
+    'view' => $view,
     'datefrom' => $datefrom,
     'dateto' => $dateto,
     'page' => $page,
@@ -58,25 +60,30 @@ $PAGE->requires->js(new moodle_url('/mod/classjournal/js/grid.js'));
 classjournal_ensure_grade_item($journal);
 
 $perpage = in_array($perpage, [5, 10, 20, 50], true) ? $perpage : 10;
+$validviews = ['all', 'past', 'month', 'week', 'day'];
+$view = in_array($view, $validviews, true) ? $view : 'all';
+[$rangefrom, $rangeto] = classjournal_view_range($view);
+// Explicit dates (e.g. the per-lesson grade link) override the period filter.
+if ($datefrom !== '' && ($fromts = strtotime($datefrom . ' 00:00:00'))) {
+    $rangefrom = $fromts;
+}
+if ($dateto !== '' && ($tots = strtotime($dateto . ' 23:59:59'))) {
+    $rangeto = $tots;
+}
+
 $where = ['journalid = :journalid'];
 $params = ['journalid' => $journal->id];
 if ($q !== '') {
     $where[] = $DB->sql_like('name', ':q', false);
     $params['q'] = '%' . $DB->sql_like_escape($q) . '%';
 }
-if ($datefrom !== '') {
-    $fromts = strtotime($datefrom . ' 00:00:00');
-    if ($fromts) {
-        $where[] = 'lessondate >= :datefrom';
-        $params['datefrom'] = $fromts;
-    }
+if ($rangefrom !== null) {
+    $where[] = 'lessondate >= :datefrom';
+    $params['datefrom'] = $rangefrom;
 }
-if ($dateto !== '') {
-    $tots = strtotime($dateto . ' 23:59:59');
-    if ($tots) {
-        $where[] = 'lessondate <= :dateto';
-        $params['dateto'] = $tots;
-    }
+if ($rangeto !== null) {
+    $where[] = 'lessondate <= :dateto';
+    $params['dateto'] = $rangeto;
 }
 $wheresql = implode(' AND ', $where);
 $lessoncount = $DB->count_records_select('classjournal_lessons', $wheresql, $params);
@@ -125,67 +132,45 @@ if (data_submitted() && confirm_sesskey()) {
 echo $OUTPUT->header();
 echo $OUTPUT->heading(format_string($journal->name) . ': ' . get_string('grades', 'classjournal'));
 
-echo html_writer::div(
-    html_writer::link(
-        new moodle_url('/mod/classjournal/export.php', ['id' => $cm->id]),
-        get_string('exportcsv', 'classjournal'),
-        ['class' => 'btn btn-secondary']
-    ) . ' ' .
-    html_writer::link(
-        new moodle_url('/mod/classjournal/import.php', ['id' => $cm->id]),
-        get_string('importcsv', 'classjournal'),
-        ['class' => 'btn btn-secondary']
-    ),
-    'mb-3'
+// Toolbar: export/import on the left, search and period filter on the right.
+$gradesurl = new moodle_url('/mod/classjournal/grades.php', ['id' => $cm->id]);
+$toolbarleft = html_writer::link(
+    new moodle_url('/mod/classjournal/export.php', ['id' => $cm->id]),
+    get_string('exportcsv', 'classjournal'),
+    ['class' => 'btn btn-outline-secondary']
+) . html_writer::link(
+    new moodle_url('/mod/classjournal/import.php', ['id' => $cm->id]),
+    get_string('importcsv', 'classjournal'),
+    ['class' => 'btn btn-outline-secondary']
 );
 
-$filterurl = new moodle_url('/mod/classjournal/grades.php', ['id' => $cm->id]);
-echo html_writer::start_tag('form', ['method' => 'get', 'action' => $filterurl->out(false), 'class' => 'mb-3']);
-echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'id', 'value' => $cm->id]);
-echo html_writer::start_div('form-row');
-echo html_writer::div(
-    html_writer::label(get_string('searchlessons', 'classjournal'), 'filter-q') .
+$searchform = html_writer::tag(
+    'form',
+    html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'id', 'value' => $cm->id]) .
+    html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'view', 'value' => $view]) .
     html_writer::empty_tag('input', [
-        'id' => 'filter-q', 'type' => 'text', 'name' => 'q', 'value' => s($q), 'class' => 'form-control',
+        'type' => 'search', 'name' => 'q', 'value' => s($q), 'class' => 'form-control',
+        'placeholder' => get_string('searchlessons', 'classjournal'),
+        'aria-label' => get_string('searchlessons', 'classjournal'),
     ]),
-    'col-md-4 mb-2'
+    ['method' => 'get', 'action' => $gradesurl->out(false), 'class' => 'cj-search']
 );
+
+$viewbuttons = '';
+foreach ($validviews as $option) {
+    $viewbuttons .= html_writer::link(
+        new moodle_url($gradesurl, ['view' => $option, 'q' => $q, 'perpage' => $perpage]),
+        get_string('view' . $option, 'classjournal'),
+        ['class' => 'btn ' . ($option === $view && $datefrom === '' ? 'btn-primary' : 'btn-outline-secondary')]
+    );
+}
+$viewbuttons = html_writer::div($viewbuttons, 'btn-group');
+
 echo html_writer::div(
-    html_writer::label(get_string('datefrom', 'classjournal'), 'filter-datefrom') .
-    html_writer::empty_tag('input', [
-        'id' => 'filter-datefrom', 'type' => 'date', 'name' => 'datefrom',
-        'value' => s($datefrom), 'class' => 'form-control',
-    ]),
-    'col-md-2 mb-2'
+    html_writer::div($toolbarleft, 'cj-toolbar-group') .
+    html_writer::div($searchform . $viewbuttons, 'cj-toolbar-group'),
+    'cj-toolbar mb-3'
 );
-echo html_writer::div(
-    html_writer::label(get_string('dateto', 'classjournal'), 'filter-dateto') .
-    html_writer::empty_tag('input', [
-        'id' => 'filter-dateto', 'type' => 'date', 'name' => 'dateto',
-        'value' => s($dateto), 'class' => 'form-control',
-    ]),
-    'col-md-2 mb-2'
-);
-echo html_writer::div(
-    html_writer::label(get_string('perpage', 'classjournal'), 'filter-perpage') .
-    html_writer::select([5 => 5, 10 => 10, 20 => 20, 50 => 50], 'perpage', $perpage, false, [
-        'id' => 'filter-perpage', 'class' => 'form-control',
-    ]),
-    'col-md-2 mb-2'
-);
-echo html_writer::div(
-    html_writer::tag('button', get_string('applyfilters', 'classjournal'), [
-        'type' => 'submit', 'class' => 'btn btn-secondary mt-4',
-    ]) . ' ' .
-    html_writer::link(
-        new moodle_url('/mod/classjournal/grades.php', ['id' => $cm->id]),
-        get_string('clearfilters', 'classjournal'),
-        ['class' => 'btn btn-link mt-4']
-    ),
-    'col-md-2 mb-2'
-);
-echo html_writer::end_div();
-echo html_writer::end_tag('form');
 
 if (!$lessons) {
     echo $OUTPUT->notification(get_string('nolessons', 'classjournal'), 'info');
@@ -228,7 +213,11 @@ foreach ($lessons as $lesson) {
     $maxlabel = classjournal_is_scale_lesson($lesson)
         ? get_string('gradetypescale', 'classjournal')
         : format_float($lesson->maxgrade);
-    $lessonmeta = userdate($lesson->lessondate, get_string('strftimedateshort')) . ' / ' . $maxlabel;
+    $lessonmeta = userdate($lesson->lessondate, get_string('strftimedateshort'));
+    if ($lessontime = classjournal_format_lesson_time($lesson)) {
+        $lessonmeta .= ', ' . $lessontime;
+    }
+    $lessonmeta .= ' / ' . $maxlabel;
     $fill = html_writer::tag('button', get_string('fillcolumn', 'classjournal'), [
         'type' => 'button',
         'class' => 'btn btn-link cj-fill',
@@ -297,6 +286,7 @@ echo html_writer::end_div();
 echo $OUTPUT->paging_bar($lessoncount, $page, $perpage, new moodle_url('/mod/classjournal/grades.php', [
     'id' => $cm->id,
     'q' => $q,
+    'view' => $view,
     'datefrom' => $datefrom,
     'dateto' => $dateto,
     'perpage' => $perpage,

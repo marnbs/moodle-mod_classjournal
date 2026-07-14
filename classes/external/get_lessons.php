@@ -67,6 +67,8 @@ class get_lessons extends \external_api {
                 'description' => $lesson->description ?? '',
                 'lessondate' => (int)$lesson->lessondate,
                 'maxgrade' => (float)$lesson->maxgrade,
+                'starttime' => $lesson->starttime === null ? null : (int)$lesson->starttime,
+                'endtime' => $lesson->endtime === null ? null : (int)$lesson->endtime,
             ];
         }
 
@@ -85,6 +87,20 @@ class get_lessons extends \external_api {
             'description' => new \external_value(PARAM_RAW, 'Lesson description'),
             'lessondate' => new \external_value(PARAM_INT, 'Lesson date timestamp'),
             'maxgrade' => new \external_value(PARAM_FLOAT, 'Maximum grade'),
+            'starttime' => new \external_value(
+                PARAM_INT,
+                'Start time as seconds from midnight, null when no time is set',
+                VALUE_OPTIONAL,
+                null,
+                NULL_ALLOWED
+            ),
+            'endtime' => new \external_value(
+                PARAM_INT,
+                'End time as seconds from midnight, null when no time is set',
+                VALUE_OPTIONAL,
+                null,
+                NULL_ALLOWED
+            ),
         ]));
     }
 

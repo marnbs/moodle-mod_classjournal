@@ -1,3 +1,75 @@
+/* Toolbar: actions on the left, search and period filter on the right. */
+
+.path-mod-classjournal .cj-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.path-mod-classjournal .cj-toolbar-group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.path-mod-classjournal .cj-search {
+    margin: 0;
+}
+
+.path-mod-classjournal .cj-actions {
+    white-space: nowrap;
+}
+
+.path-mod-classjournal .cj-actions .icon {
+    margin: 0 0.25rem;
+}
+
+/* Bulk action bar under the lesson list. */
+
+.path-mod-classjournal .cj-bulk {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.path-mod-classjournal .cj-bulk select {
+    width: auto;
+}
+
+/* Student report: summary cards and grade highlighting. */
+
+.path-mod-classjournal .cj-cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.path-mod-classjournal .cj-card {
+    min-width: 14rem;
+}
+
+.path-mod-classjournal .cj-card-label {
+    font-size: 0.85rem;
+}
+
+.path-mod-classjournal .cj-card-value {
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.path-mod-classjournal .cj-progress {
+    height: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.path-mod-classjournal .cj-student-report td.cj-graded {
+    font-weight: 600;
+}
+
 /* Grade entry grid: sticky header and first column, colour indication. */
 
 #cj-grade-grid {

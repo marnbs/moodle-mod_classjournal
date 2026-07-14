@@ -44,6 +44,18 @@ class create_lesson extends \external_api {
             'description' => new \external_value(PARAM_RAW, 'Lesson description', VALUE_DEFAULT, ''),
             'lessondate' => new \external_value(PARAM_INT, 'Lesson date as Unix timestamp'),
             'maxgrade' => new \external_value(PARAM_FLOAT, 'Maximum grade', VALUE_DEFAULT, 100),
+            'starttime' => new \external_value(
+                PARAM_INT,
+                'Start time as seconds from midnight, omit for no time',
+                VALUE_DEFAULT,
+                null
+            ),
+            'endtime' => new \external_value(
+                PARAM_INT,
+                'End time as seconds from midnight, omit for no time',
+                VALUE_DEFAULT,
+                null
+            ),
         ]);
     }
 
@@ -55,6 +67,8 @@ class create_lesson extends \external_api {
      * @param string $description
      * @param int $lessondate
      * @param float $maxgrade
+     * @param int|null $starttime
+     * @param int|null $endtime
      * @return array
      */
     public static function execute(
@@ -62,7 +76,9 @@ class create_lesson extends \external_api {
         string $name,
         string $description = '',
         int $lessondate = 0,
-        float $maxgrade = 100
+        float $maxgrade = 100,
+        ?int $starttime = null,
+        ?int $endtime = null
     ): array {
         global $DB, $CFG;
 
@@ -72,6 +88,8 @@ class create_lesson extends \external_api {
             'description' => $description,
             'lessondate' => $lessondate,
             'maxgrade' => $maxgrade,
+            'starttime' => $starttime,
+            'endtime' => $endtime,
         ]);
 
         $cm = get_coursemodule_from_id('classjournal', $params['cmid'], 0, false, MUST_EXIST);
@@ -91,7 +109,10 @@ class create_lesson extends \external_api {
             $params['name'],
             $params['description'],
             $params['lessondate'] ?: time(),
-            $params['maxgrade']
+            $params['maxgrade'],
+            0,
+            $params['starttime'] === null ? null : (int)$params['starttime'],
+            $params['endtime'] === null ? null : (int)$params['endtime']
         );
 
         return [
@@ -101,6 +122,8 @@ class create_lesson extends \external_api {
             'description' => $lesson->description,
             'lessondate' => (int)$lesson->lessondate,
             'maxgrade' => (float)$lesson->maxgrade,
+            'starttime' => $lesson->starttime === null ? null : (int)$lesson->starttime,
+            'endtime' => $lesson->endtime === null ? null : (int)$lesson->endtime,
         ];
     }
 
@@ -117,6 +140,20 @@ class create_lesson extends \external_api {
             'description' => new \external_value(PARAM_RAW, 'Lesson description'),
             'lessondate' => new \external_value(PARAM_INT, 'Lesson date timestamp'),
             'maxgrade' => new \external_value(PARAM_FLOAT, 'Maximum grade'),
+            'starttime' => new \external_value(
+                PARAM_INT,
+                'Start time as seconds from midnight, null when no time is set',
+                VALUE_OPTIONAL,
+                null,
+                NULL_ALLOWED
+            ),
+            'endtime' => new \external_value(
+                PARAM_INT,
+                'End time as seconds from midnight, null when no time is set',
+                VALUE_OPTIONAL,
+                null,
+                NULL_ALLOWED
+            ),
         ]);
     }
 }

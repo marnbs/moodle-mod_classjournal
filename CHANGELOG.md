@@ -1,6 +1,32 @@
 # Changelog
 
 
+#### v1.0.0 2026-07-14
+- Redesigned the lesson list: a toolbar with the
+  add button on the left and search plus period filters (All / All past /
+  Month / Week / Today) on the right, dates shown as `15.07.26 (Wed)`, icon
+  actions (grade / edit / delete), a select-all checkbox, and a bulk action
+  dropdown with an OK button under the table.
+- The grades page got the same toolbar (export/import, search, period
+  filters) instead of the old filter form.
+- Optional lesson time: a start and end time can be set per lesson, shown in
+  the lesson list, the grade grid header, and the student report; calendar
+  events use the exact start time and duration. New nullable `starttime` /
+  `endtime` columns (seconds from midnight).
+- New bulk action: change the date of the selected lessons in one step
+  (lesson times are kept).
+- Lesson deletion is confirmed in a modal dialog; without JavaScript the old
+  confirmation page used.
+- Student report: summary cards (journal total with a progress bar, graded
+  lesson count) and a table with dates, times, and highlighted grades.
+- Period filters are calculated in the user's timezone.
+- Web services: `create_lesson` accepts optional `starttime` / `endtime`;
+  `get_lessons` returns them.
+- Backup now includes the previously missed `scaleid` and `calendarevents`
+  fields along with the new time fields.
+- Removed the bundled Russian language pack; translations are maintained in
+  AMOS.
+
 #### v0.4.0 2026-06-26
 - Batch grade saving: the grades page writes all changed cells in one pass and
   syncs the Gradebook once instead of once per cell; unchanged and empty cells

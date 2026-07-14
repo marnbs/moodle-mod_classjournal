@@ -51,6 +51,28 @@ class lesson_form extends \moodleform {
 
         $mform->addElement('date_selector', 'lessondate', get_string('lessondate', 'classjournal'));
 
+        // Optional lesson time: start and end as hour/minute selects, enabled by a checkbox.
+        $mform->addElement('advcheckbox', 'hastime', get_string('settime', 'classjournal'));
+        $mform->setDefault('hastime', 0);
+
+        $hours = [];
+        for ($h = 0; $h < 24; $h++) {
+            $hours[$h] = sprintf('%02d', $h);
+        }
+        $minutes = [];
+        for ($m = 0; $m < 60; $m += 5) {
+            $minutes[$m] = sprintf('%02d', $m);
+        }
+        $timegroup = [
+            $mform->createElement('select', 'starthour', '', $hours),
+            $mform->createElement('select', 'startminute', '', $minutes),
+            $mform->createElement('static', 'timeto', '', '&ndash;'),
+            $mform->createElement('select', 'endhour', '', $hours),
+            $mform->createElement('select', 'endminute', '', $minutes),
+        ];
+        $mform->addGroup($timegroup, 'lessontime', get_string('lessontime', 'classjournal'), ' ', false);
+        $mform->hideIf('lessontime', 'hastime', 'notchecked');
+
         // Per-lesson grading: numeric points or a Moodle scale.
         $mform->addElement('select', 'gradetype', get_string('gradetype', 'classjournal'), [
             'point' => get_string('gradetypepoint', 'classjournal'),
@@ -94,6 +116,14 @@ class lesson_form extends \moodleform {
      */
     public function validation($data, $files) {
         $errors = parent::validation($data, $files);
+
+        if (!empty($data['hastime'])) {
+            $start = (int)($data['starthour'] ?? 0) * 3600 + (int)($data['startminute'] ?? 0) * 60;
+            $end = (int)($data['endhour'] ?? 0) * 3600 + (int)($data['endminute'] ?? 0) * 60;
+            if ($end <= $start) {
+                $errors['lessontime'] = get_string('invalidlessontime', 'classjournal');
+            }
+        }
 
         if (($data['gradetype'] ?? 'point') === 'scale') {
             if (empty($data['scaleid'])) {
