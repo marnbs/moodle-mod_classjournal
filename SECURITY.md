@@ -96,7 +96,7 @@ the token owner's capabilities, that is very much in scope — please report it.
 
 ## Recognition
 
-I'm grateful to everyone who reports responsibly. With your permission, we're
+I'm grateful to everyone who reports responsibly. With your permission, i'm
 happy to credit you in the release notes or `CHANGELOG.md` for a valid report.
 Let me know how you'd like to be credited (or if you prefer to remain anonymous).
 
