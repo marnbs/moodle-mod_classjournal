@@ -43,6 +43,8 @@ Registered functions:
 - `classjournal_create_lesson(cmid, name, description, lessondate, maxgrade)`
 - `classjournal_set_grade(lessonid, userid, grade, comment)`
 - `classjournal_get_student_grades(cmid, userid)`
+- `classjournal_update_lesson`
+- `classjournal_delete_lesson`
 
 Grades are checked against each lesson maximum and synced to Moodle Gradebook. `classjournal_get_student_grades` and `classjournal_get_final_grades` return the calculated final grade, aggregation mode, empty-grade mode, Gradebook maximum, and a human-readable aggregation description.
 
