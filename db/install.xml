@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="mod/classjournal/db" VERSION="2026071401" COMMENT="XMLDB file for Moodle mod_classjournal"
+<XMLDB PATH="mod/classjournal/db" VERSION="2026071404" COMMENT="XMLDB file for Moodle mod_classjournal"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd">
   <TABLES>
@@ -35,6 +35,7 @@
         <FIELD NAME="maxgrade" TYPE="number" LENGTH="10" DECIMALS="5" NOTNULL="true" DEFAULT="100" SEQUENCE="false"/>
         <FIELD NAME="scaleid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Scale id when the lesson is graded on a scale, 0 for numeric points"/>
         <FIELD NAME="eventid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Calendar event id for this lesson, 0 when none"/>
+        <FIELD NAME="clientrequestid" TYPE="char" LENGTH="64" NOTNULL="false" SEQUENCE="false" COMMENT="Idempotency key supplied by the client, null when none"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
         <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
       </FIELDS>
@@ -44,6 +45,7 @@
       </KEYS>
       <INDEXES>
         <INDEX NAME="journalid-lessondate" UNIQUE="false" FIELDS="journalid, lessondate"/>
+        <INDEX NAME="journalid-clientrequestid" UNIQUE="true" FIELDS="journalid, clientrequestid"/>
       </INDEXES>
     </TABLE>
     <TABLE NAME="classjournal_grades" COMMENT="Class journal lesson grades">

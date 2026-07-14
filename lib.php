@@ -109,6 +109,7 @@ function classjournal_add_instance($data, $mform = null) {
  * @param int $scaleid
  * @param int|null $starttime Start time as seconds from midnight, null when no time is set.
  * @param int|null $endtime End time as seconds from midnight, null when no time is set.
+ * @param string|null $clientrequestid Idempotency key, null or empty when not supplied.
  * @return stdClass
  */
 function classjournal_create_lesson(
@@ -119,7 +120,8 @@ function classjournal_create_lesson(
     float $maxgrade,
     int $scaleid = 0,
     ?int $starttime = null,
-    ?int $endtime = null
+    ?int $endtime = null,
+    ?string $clientrequestid = null
 ): stdClass {
     global $DB;
 
@@ -141,6 +143,7 @@ function classjournal_create_lesson(
         'maxgrade' => $maxgrade,
         'scaleid' => $scaleid,
         'eventid' => 0,
+        'clientrequestid' => ($clientrequestid === null || $clientrequestid === '') ? null : $clientrequestid,
         'timecreated' => $now,
         'timemodified' => $now,
     ];

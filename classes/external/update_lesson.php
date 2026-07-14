@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * External function to create a journal lesson.
+ * External function to update a journal lesson.
  *
  * @package    mod_classjournal
  * @copyright  2026 Konstantin K <rbk112v@gmail.com>
@@ -29,9 +29,9 @@ defined('MOODLE_INTERNAL') || die();
 require_once($CFG->libdir . '/externallib.php');
 
 /**
- * External function to create a journal lesson.
+ * External function to update a journal lesson.
  */
-class create_lesson extends \external_api {
+class update_lesson extends \external_api {
     /**
      * Parameters.
      *
@@ -39,28 +39,32 @@ class create_lesson extends \external_api {
      */
     public static function execute_parameters(): \external_function_parameters {
         return new \external_function_parameters([
-            'cmid' => new \external_value(PARAM_INT, 'Course module id'),
-            'name' => new \external_value(PARAM_TEXT, 'Lesson name'),
-            'description' => new \external_value(PARAM_RAW, 'Lesson description', VALUE_DEFAULT, ''),
-            'lessondate' => new \external_value(PARAM_INT, 'Lesson date as Unix timestamp'),
-            'maxgrade' => new \external_value(PARAM_FLOAT, 'Maximum grade', VALUE_DEFAULT, 100),
+            'lessonid' => new \external_value(PARAM_INT, 'Lesson id'),
+            'name' => new \external_value(PARAM_TEXT, 'Lesson name, omit to keep unchanged', VALUE_DEFAULT, null),
+            'description' => new \external_value(
+                PARAM_RAW,
+                'Lesson description, omit to keep unchanged',
+                VALUE_DEFAULT,
+                null
+            ),
+            'lessondate' => new \external_value(
+                PARAM_INT,
+                'Lesson date as Unix timestamp, omit to keep unchanged',
+                VALUE_DEFAULT,
+                null
+            ),
+            'maxgrade' => new \external_value(PARAM_FLOAT, 'Maximum grade, omit to keep unchanged', VALUE_DEFAULT, null),
             'starttime' => new \external_value(
                 PARAM_INT,
-                'Start time as seconds from midnight, omit for no time',
+                'Start time as seconds from midnight, omit to keep unchanged',
                 VALUE_DEFAULT,
                 null
             ),
             'endtime' => new \external_value(
                 PARAM_INT,
-                'End time as seconds from midnight, omit for no time',
+                'End time as seconds from midnight, omit to keep unchanged',
                 VALUE_DEFAULT,
                 null
-            ),
-            'clientrequestid' => new \external_value(
-                PARAM_ALPHANUMEXT,
-                'Idempotency key; if a lesson with this key already exists in the journal it is returned unchanged',
-                VALUE_DEFAULT,
-                ''
             ),
         ]);
     }
@@ -68,96 +72,82 @@ class create_lesson extends \external_api {
     /**
      * Execute.
      *
-     * @param int $cmid
-     * @param string $name
-     * @param string $description
-     * @param int $lessondate
-     * @param float $maxgrade
+     * @param int $lessonid
+     * @param string|null $name
+     * @param string|null $description
+     * @param int|null $lessondate
+     * @param float|null $maxgrade
      * @param int|null $starttime
      * @param int|null $endtime
-     * @param string $clientrequestid
      * @return array
      */
     public static function execute(
-        int $cmid,
-        string $name,
-        string $description = '',
-        int $lessondate = 0,
-        float $maxgrade = 100,
+        int $lessonid,
+        ?string $name = null,
+        ?string $description = null,
+        ?int $lessondate = null,
+        ?float $maxgrade = null,
         ?int $starttime = null,
-        ?int $endtime = null,
-        string $clientrequestid = ''
+        ?int $endtime = null
     ): array {
         global $DB, $CFG;
 
         $params = self::validate_parameters(self::execute_parameters(), [
-            'cmid' => $cmid,
+            'lessonid' => $lessonid,
             'name' => $name,
             'description' => $description,
             'lessondate' => $lessondate,
             'maxgrade' => $maxgrade,
             'starttime' => $starttime,
             'endtime' => $endtime,
-            'clientrequestid' => $clientrequestid,
         ]);
 
-        $cm = get_coursemodule_from_id('classjournal', $params['cmid'], 0, false, MUST_EXIST);
-        $journal = $DB->get_record('classjournal', ['id' => $cm->instance], '*', MUST_EXIST);
+        $lesson = $DB->get_record('classjournal_lessons', ['id' => $params['lessonid']], '*', MUST_EXIST);
+        $journal = $DB->get_record('classjournal', ['id' => $lesson->journalid], '*', MUST_EXIST);
+        $cm = get_coursemodule_from_instance('classjournal', $journal->id, $journal->course, false, MUST_EXIST);
         $context = \context_module::instance($cm->id);
         self::validate_context($context);
         require_capability('mod/classjournal:manage', $context);
 
-        if ($params['maxgrade'] <= 0) {
-            throw new \moodle_exception('invalidgrade', 'classjournal', '', $params['maxgrade']);
-        }
-
         require_once($CFG->dirroot . '/mod/classjournal/lib.php');
 
-        // Idempotency: if a lesson with this client request id already exists in the
-        // journal, return it unchanged instead of creating a duplicate.
-        $clientrequestid = $params['clientrequestid'];
-        if ($clientrequestid !== '') {
-            $existing = $DB->get_record('classjournal_lessons', [
-                'journalid' => $journal->id,
-                'clientrequestid' => $clientrequestid,
-            ]);
-            if ($existing) {
-                return self::format_lesson($cm, $existing);
-            }
+        // Null parameters leave the existing value untouched.
+        $name = $params['name'] === null ? $lesson->name : $params['name'];
+        $description = $params['description'] === null ? (string)$lesson->description : $params['description'];
+        $lessondate = $params['lessondate'] === null ? (int)$lesson->lessondate : (int)$params['lessondate'];
+        $maxgrade = $params['maxgrade'] === null ? (float)$lesson->maxgrade : (float)$params['maxgrade'];
+        $starttime = $params['starttime'] === null
+            ? ($lesson->starttime === null ? null : (int)$lesson->starttime)
+            : (int)$params['starttime'];
+        $endtime = $params['endtime'] === null
+            ? ($lesson->endtime === null ? null : (int)$lesson->endtime)
+            : (int)$params['endtime'];
+
+        if ($maxgrade <= 0) {
+            throw new \moodle_exception('invalidgrade', 'classjournal', '', $maxgrade);
         }
 
-        $lesson = classjournal_create_lesson(
+        $updated = classjournal_update_lesson(
             $journal,
-            $params['name'],
-            $params['description'],
-            $params['lessondate'] ?: time(),
-            $params['maxgrade'],
-            0,
-            $params['starttime'] === null ? null : (int)$params['starttime'],
-            $params['endtime'] === null ? null : (int)$params['endtime'],
-            $clientrequestid
+            (int)$lesson->id,
+            $name,
+            $description,
+            $lessondate,
+            $maxgrade,
+            (int)$lesson->scaleid,
+            $starttime,
+            $endtime
         );
 
-        return self::format_lesson($cm, $lesson);
-    }
-
-    /**
-     * Shape a lesson record for the web service response.
-     *
-     * @param \stdClass $cm
-     * @param \stdClass $lesson
-     * @return array
-     */
-    protected static function format_lesson(\stdClass $cm, \stdClass $lesson): array {
         return [
-            'id' => (int)$lesson->id,
+            'id' => (int)$updated->id,
             'cmid' => (int)$cm->id,
-            'name' => $lesson->name,
-            'description' => $lesson->description,
-            'lessondate' => (int)$lesson->lessondate,
-            'maxgrade' => (float)$lesson->maxgrade,
-            'starttime' => $lesson->starttime === null ? null : (int)$lesson->starttime,
-            'endtime' => $lesson->endtime === null ? null : (int)$lesson->endtime,
+            'name' => $updated->name,
+            'description' => $updated->description,
+            'lessondate' => (int)$updated->lessondate,
+            'maxgrade' => (float)$updated->maxgrade,
+            'starttime' => $updated->starttime === null ? null : (int)$updated->starttime,
+            'endtime' => $updated->endtime === null ? null : (int)$updated->endtime,
         ];
     }
 

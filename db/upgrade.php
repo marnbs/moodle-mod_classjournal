@@ -145,5 +145,22 @@ function xmldb_classjournal_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026071401, 'classjournal');
     }
 
+    if ($oldversion < 2026071404) {
+        $dbman = $DB->get_manager();
+        $lessons = new xmldb_table('classjournal_lessons');
+
+        $clientrequestid = new xmldb_field('clientrequestid', XMLDB_TYPE_CHAR, '64', null, null, null, null, 'eventid');
+        if (!$dbman->field_exists($lessons, $clientrequestid)) {
+            $dbman->add_field($lessons, $clientrequestid);
+        }
+
+        $index = new xmldb_index('journalid-clientrequestid', XMLDB_INDEX_UNIQUE, ['journalid', 'clientrequestid']);
+        if (!$dbman->index_exists($lessons, $index)) {
+            $dbman->add_index($lessons, $index);
+        }
+
+        upgrade_mod_savepoint(true, 2026071404, 'classjournal');
+    }
+
     return true;
 }
