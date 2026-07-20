@@ -1,6 +1,16 @@
 # Changelog
 
 
+#### v1.1.0 2026-07-20
+- Web services: added `update_lesson` and `delete_lesson`. `create_lesson` now
+  accepts an optional idempotency key (`clientrequestid`); a retried request
+  with the same key returns the existing lesson instead of creating a
+  duplicate. New nullable `clientrequestid` column with a unique per-journal
+  index.
+- Declared `FEATURE_MOD_PURPOSE` (collaboration) so the activity shows in the
+  right activity-chooser category, and refreshed the monochrome icon /
+  monologo SVGs.
+
 #### v1.0.0 2026-07-14
 - Redesigned the lesson list: a toolbar with the
   add button on the left and search plus period filters (All / All past /
