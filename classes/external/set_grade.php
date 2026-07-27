@@ -77,6 +77,11 @@ class set_grade extends \external_api {
         }
 
         require_once($CFG->dirroot . '/mod/classjournal/lib.php');
+
+        // In separate groups mode a lesson of another group is out of reach.
+        if (!classjournal_can_access_lesson($cm, $context, $lesson)) {
+            throw new \required_capability_exception($context, 'moodle/site:accessallgroups', 'nopermissions', '');
+        }
         $recordid = classjournal_set_lesson_grade($lesson, $params['userid'], $params['grade'], $params['comment']);
 
         return ['id' => $recordid, 'lessonid' => (int)$lesson->id, 'userid' => $params['userid']];

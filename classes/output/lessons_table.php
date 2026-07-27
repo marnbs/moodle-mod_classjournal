@@ -101,6 +101,20 @@ class lessons_table extends \table_sql {
     }
 
     /**
+     * Group the lesson is restricted to, or the all participants label.
+     *
+     * @param \stdClass $row
+     * @return string
+     */
+    public function col_groupid($row): string {
+        $name = classjournal_get_lesson_group_name($row);
+
+        return $name !== ''
+            ? $name
+            : \html_writer::span(get_string('lessongroupall', 'classjournal'), 'text-muted');
+    }
+
+    /**
      * Maximum grade or scale label.
      *
      * @param \stdClass $row

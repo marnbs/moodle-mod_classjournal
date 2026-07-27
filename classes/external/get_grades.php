@@ -50,7 +50,7 @@ class get_grades extends \external_api {
      * @return array
      */
     public static function execute(int $lessonid): array {
-        global $DB;
+        global $DB, $CFG;
 
         ['lessonid' => $lessonid] = self::validate_parameters(self::execute_parameters(), ['lessonid' => $lessonid]);
         $lesson = $DB->get_record('classjournal_lessons', ['id' => $lessonid], '*', MUST_EXIST);
@@ -59,6 +59,13 @@ class get_grades extends \external_api {
         $context = \context_module::instance($cm->id);
         self::validate_context($context);
         require_capability('mod/classjournal:viewallgrades', $context);
+
+        require_once($CFG->dirroot . '/mod/classjournal/lib.php');
+
+        // In separate groups mode a lesson of another group is out of reach.
+        if (!classjournal_can_access_lesson($cm, $context, $lesson)) {
+            throw new \required_capability_exception($context, 'moodle/site:accessallgroups', 'nopermissions', '');
+        }
 
         $records = $DB->get_records('classjournal_grades', ['lessonid' => $lesson->id], 'userid ASC');
         $result = [];

@@ -78,16 +78,37 @@ $string['importcsv'] = 'Import from file';
 $string['importdone'] = 'Grades updated: {$a->written}, rows skipped: {$a->skipped}.';
 $string['importhelp'] = 'Upload an Excel (.xlsx) or CSV file exported from this page. Keep the "userid" column and the lesson headers (each ends with [#id]). A value sets the grade; an empty cell means no grade. Comments are not changed.';
 $string['invalidgrade'] = 'Grade must be between 0 and {$a}.';
+$string['invalidlessongroup'] = 'You cannot assign a lesson to this group.';
 $string['invalidlessontime'] = 'The end time must be after the start time.';
 $string['lesson'] = 'Lesson';
 $string['lessondate'] = 'Lesson date';
+$string['lessongroup'] = 'Group';
+$string['lessongroup_help'] = 'Restrict the lesson to one group of the course.
+
+* **All participants** – every student sees the lesson, and the calendar event is a course event.
+* **A group** – only members of that group see and are graded on the lesson, and the calendar event is shown to that group only.
+
+Lessons of other groups are ignored when a student\'s journal total is calculated, so a group only ever competes with its own lessons.';
+$string['lessongroupall'] = 'All participants';
 $string['lessonname'] = 'Lesson name';
+$string['lessonnotforuser'] = 'n/a';
 $string['lessons'] = 'Lessons';
 $string['lessonsdatechanged'] = 'The date of the selected lessons has been changed.';
 $string['lessonsdeleted'] = 'Selected lessons deleted.';
 $string['lessontime'] = 'Time';
 $string['maxgrade'] = 'Maximum grade';
 $string['modulename'] = 'Class journal';
+$string['modulename_help'] = 'The class journal activity lets a teacher keep a traditional lesson-by-lesson register inside a course: a list of lessons on the left, students on the right, and one grade per student per lesson.
+
+Teachers can:
+
+* Create lessons one by one, or repeat one lesson every N weeks to fill a whole term at once.
+* Give each lesson a date, an optional time span, and a maximum grade in points or a Moodle scale.
+* Restrict a lesson to a single course group, so only its members see it and are graded on it.
+* Enter grades and comments in one grid, with autosave, or export the grid to Excel and import it back.
+* Publish lesson dates to the course calendar.
+
+Students see their own grades for every lesson, their running total, and how many lessons have been graded so far. The Gradebook receives a single grade item per journal, calculated as the sum or the average of the lessons, so the journal contributes one clear column to the course total.';
 $string['modulenameplural'] = 'Class journals';
 $string['nogrades'] = 'No grades yet.';
 $string['nolessons'] = 'No lessons yet.';
@@ -109,6 +130,7 @@ $string['settime'] = 'Set lesson time';
 $string['showallgrades'] = 'Show other students grades';
 $string['showallgrades_help'] = 'If enabled, students can see grades for other students. Keep disabled for private journals.';
 $string['total'] = 'Total';
+$string['usernotinlessongroup'] = 'This student is not a member of the group the lesson is assigned to.';
 $string['viewall'] = 'All';
 $string['viewday'] = 'Today';
 $string['viewmonth'] = 'Month';

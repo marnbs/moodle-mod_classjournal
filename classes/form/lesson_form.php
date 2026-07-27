@@ -33,7 +33,8 @@ require_once($CFG->libdir . '/gradelib.php');
 /**
  * Lesson editing form.
  *
- * Expects customdata: isedit (bool), courseid (int), defaultmaxgrade (float).
+ * Expects customdata: isedit (bool), courseid (int), defaultmaxgrade (float),
+ * groups (array of group records the teacher may assign the lesson to).
  */
 class lesson_form extends \moodleform {
     /**
@@ -44,12 +45,25 @@ class lesson_form extends \moodleform {
         $isedit = !empty($this->_customdata['isedit']);
         $courseid = (int)($this->_customdata['courseid'] ?? 0);
         $defaultmax = $this->_customdata['defaultmaxgrade'] ?? 100;
+        $groups = $this->_customdata['groups'] ?? [];
 
         $mform->addElement('text', 'name', get_string('lessonname', 'classjournal'), ['size' => 64]);
         $mform->setType('name', PARAM_TEXT);
         $mform->addRule('name', null, 'required', null, 'client');
 
         $mform->addElement('date_selector', 'lessondate', get_string('lessondate', 'classjournal'));
+
+        // Only offer the group selector when the course actually has groups.
+        if ($groups) {
+            $groupoptions = [0 => get_string('lessongroupall', 'classjournal')];
+            foreach ($groups as $group) {
+                $groupoptions[(int)$group->id] = format_string($group->name);
+            }
+            $mform->addElement('select', 'groupid', get_string('lessongroup', 'classjournal'), $groupoptions);
+            $mform->setType('groupid', PARAM_INT);
+            $mform->setDefault('groupid', 0);
+            $mform->addHelpButton('groupid', 'lessongroup', 'classjournal');
+        }
 
         // Optional lesson time: start and end as hour/minute selects, enabled by a checkbox.
         $mform->addElement('advcheckbox', 'hastime', get_string('settime', 'classjournal'));

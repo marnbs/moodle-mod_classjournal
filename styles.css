@@ -116,6 +116,14 @@
     box-shadow: inset 0 0 0 2px #dc3545;
 }
 
+/* Cells for students outside the lesson's group carry no inputs. */
+
+#cj-grade-grid td.cj-notingroup {
+    text-align: center;
+    vertical-align: middle;
+    background: rgba(0, 0, 0, 0.03);
+}
+
 #cj-grade-grid .cj-fill {
     margin-top: 0.25rem;
     padding: 0 0.25rem;

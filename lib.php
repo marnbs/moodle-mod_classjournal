@@ -35,6 +35,7 @@ function classjournal_supports($feature) {
         case FEATURE_SHOW_DESCRIPTION:
         case FEATURE_COMPLETION_TRACKS_VIEWS:
         case FEATURE_BACKUP_MOODLE2:
+        case FEATURE_GROUPS:
             return true;
         case FEATURE_MOD_PURPOSE:
             return MOD_PURPOSE_ASSESSMENT;
@@ -110,6 +111,7 @@ function classjournal_add_instance($data, $mform = null) {
  * @param int|null $starttime Start time as seconds from midnight, null when no time is set.
  * @param int|null $endtime End time as seconds from midnight, null when no time is set.
  * @param string|null $clientrequestid Idempotency key, null or empty when not supplied.
+ * @param int $groupid Group the lesson is restricted to, 0 for all participants.
  * @return stdClass
  */
 function classjournal_create_lesson(
@@ -121,7 +123,8 @@ function classjournal_create_lesson(
     int $scaleid = 0,
     ?int $starttime = null,
     ?int $endtime = null,
-    ?string $clientrequestid = null
+    ?string $clientrequestid = null,
+    int $groupid = 0
 ): stdClass {
     global $DB;
 
@@ -142,6 +145,7 @@ function classjournal_create_lesson(
         'endtime' => $endtime,
         'maxgrade' => $maxgrade,
         'scaleid' => $scaleid,
+        'groupid' => classjournal_normalise_lesson_group($journal, $groupid),
         'eventid' => 0,
         'clientrequestid' => ($clientrequestid === null || $clientrequestid === '') ? null : $clientrequestid,
         'timecreated' => $now,
@@ -166,6 +170,7 @@ function classjournal_create_lesson(
  * @param int $scaleid
  * @param int|null $starttime Start time as seconds from midnight, null when no time is set.
  * @param int|null $endtime End time as seconds from midnight, null when no time is set.
+ * @param int|null $groupid Group the lesson is restricted to (0 for all participants), null keeps the current one.
  * @return stdClass the updated lesson record
  */
 function classjournal_update_lesson(
@@ -177,7 +182,8 @@ function classjournal_update_lesson(
     float $maxgrade,
     int $scaleid = 0,
     ?int $starttime = null,
-    ?int $endtime = null
+    ?int $endtime = null,
+    ?int $groupid = null
 ): stdClass {
     global $DB;
 
@@ -197,6 +203,9 @@ function classjournal_update_lesson(
     $existing->endtime = $endtime;
     $existing->maxgrade = $maxgrade;
     $existing->scaleid = $scaleid;
+    if ($groupid !== null) {
+        $existing->groupid = classjournal_normalise_lesson_group($journal, $groupid);
+    }
     $existing->timemodified = time();
     $DB->update_record('classjournal_lessons', $existing);
     classjournal_grade_item_update($journal);
@@ -235,14 +244,21 @@ function classjournal_sync_lesson_event(stdClass $journal, stdClass $lesson): vo
         }
     }
 
+    // A lesson restricted to a group becomes a group calendar event, so only the
+    // members of that group see it; unrestricted lessons stay course events.
+    $groupid = (int)($lesson->groupid ?? 0);
+    if ($groupid && !$DB->record_exists('groups', ['id' => $groupid, 'courseid' => $journal->course])) {
+        $groupid = 0;
+    }
+
     $eventdata = (object)[
         'name' => format_string($lesson->name),
         'description' => '',
         'format' => FORMAT_PLAIN,
         'courseid' => $journal->course,
-        'groupid' => 0,
+        'groupid' => $groupid,
         'userid' => 0,
-        'eventtype' => 'course',
+        'eventtype' => $groupid ? 'group' : 'course',
         'timestart' => $timestart,
         'timeduration' => $timeduration,
         'visible' => 1,
@@ -273,6 +289,221 @@ function classjournal_delete_lesson_event(int $eventid): void {
         $event = \calendar_event::load($eventid);
         $event->delete();
     }
+}
+
+/**
+ * Reject a group id that does not belong to the journal's course.
+ *
+ * @param stdClass $journal
+ * @param int $groupid
+ * @return int the group id, or 0 when the lesson is for all participants
+ */
+function classjournal_normalise_lesson_group(stdClass $journal, int $groupid): int {
+    global $DB;
+
+    if ($groupid <= 0) {
+        return 0;
+    }
+
+    return $DB->record_exists('groups', ['id' => $groupid, 'courseid' => $journal->course]) ? $groupid : 0;
+}
+
+/**
+ * Groups a teacher may assign lessons to.
+ *
+ * In separate groups mode a teacher without moodle/site:accessallgroups only gets
+ * their own groups, matching what core does elsewhere.
+ *
+ * @param stdClass|cm_info $cm
+ * @param context_module $context
+ * @param int $userid defaults to the current user
+ * @return array group records keyed by id
+ */
+function classjournal_get_assignable_groups($cm, context_module $context, int $userid = 0): array {
+    global $USER;
+
+    $userid = $userid ?: (int)$USER->id;
+    if (groups_get_activity_groupmode($cm) == SEPARATEGROUPS &&
+            !has_capability('moodle/site:accessallgroups', $context, $userid)) {
+        return groups_get_all_groups($cm->course, $userid);
+    }
+
+    return groups_get_all_groups($cm->course);
+}
+
+/**
+ * Group ids whose lessons a user may see, or null when every lesson is visible.
+ *
+ * Students always see only lessons for all participants plus lessons for their own
+ * groups. Teachers see everything unless the activity is in separate groups mode
+ * and they lack moodle/site:accessallgroups.
+ *
+ * @param stdClass|cm_info $cm
+ * @param context_module $context
+ * @param int $userid defaults to the current user
+ * @return array|null list of group ids, or null for unrestricted access
+ */
+function classjournal_get_visible_group_ids($cm, context_module $context, int $userid = 0): ?array {
+    global $USER;
+
+    $userid = $userid ?: (int)$USER->id;
+    $canviewall = has_capability('mod/classjournal:viewallgrades', $context, $userid) ||
+        has_capability('mod/classjournal:manage', $context, $userid);
+
+    if ($canviewall && (groups_get_activity_groupmode($cm) != SEPARATEGROUPS ||
+            has_capability('moodle/site:accessallgroups', $context, $userid))) {
+        return null;
+    }
+
+    return array_map('intval', array_keys(groups_get_all_groups($cm->course, $userid)));
+}
+
+/**
+ * SQL fragment limiting a lesson query to the groups a user may see.
+ *
+ * @param array|null $groupids result of classjournal_get_visible_group_ids
+ * @param string $field the group column, qualified when the query uses aliases
+ * @param string $paramprefix unique prefix for the generated named parameters
+ * @return array [sql fragment, params]; the fragment is '' when nothing is restricted
+ */
+function classjournal_group_visibility_sql(?array $groupids, string $field = 'groupid', string $paramprefix = 'cjgroup'): array {
+    global $DB;
+
+    if ($groupids === null) {
+        return ['', []];
+    }
+    if (!$groupids) {
+        return ["$field = 0", []];
+    }
+
+    [$insql, $params] = $DB->get_in_or_equal($groupids, SQL_PARAMS_NAMED, $paramprefix);
+
+    return ["($field = 0 OR $field $insql)", $params];
+}
+
+/**
+ * Drop the students a user may not see in separate groups mode.
+ *
+ * Outside separate groups mode, or for users with moodle/site:accessallgroups,
+ * the list is returned unchanged.
+ *
+ * @param stdClass|cm_info $cm
+ * @param context_module $context
+ * @param array $students user records keyed by id
+ * @param array $groupmap course group memberships, see classjournal_get_course_group_map
+ * @param int $userid defaults to the current user
+ * @return array
+ */
+function classjournal_filter_students_by_group(
+    $cm,
+    context_module $context,
+    array $students,
+    array $groupmap,
+    int $userid = 0
+): array {
+    global $USER;
+
+    $userid = $userid ?: (int)$USER->id;
+    if (groups_get_activity_groupmode($cm) != SEPARATEGROUPS ||
+            has_capability('moodle/site:accessallgroups', $context, $userid)) {
+        return $students;
+    }
+
+    $mygroups = $groupmap[$userid] ?? [];
+    foreach ($students as $key => $student) {
+        if (!array_intersect_key($groupmap[(int)$student->id] ?? [], $mygroups)) {
+            unset($students[$key]);
+        }
+    }
+
+    return $students;
+}
+
+/**
+ * Whether a user may see and manage one particular lesson.
+ *
+ * @param stdClass|cm_info $cm
+ * @param context_module $context
+ * @param stdClass $lesson
+ * @param int $userid defaults to the current user
+ * @return bool
+ */
+function classjournal_can_access_lesson($cm, context_module $context, stdClass $lesson, int $userid = 0): bool {
+    $visible = classjournal_get_visible_group_ids($cm, $context, $userid);
+    if ($visible === null) {
+        return true;
+    }
+    $groupid = (int)($lesson->groupid ?? 0);
+
+    return $groupid === 0 || in_array($groupid, $visible, true);
+}
+
+/**
+ * Group memberships for a course, as a lookup of userid => [groupid => true].
+ *
+ * @param int $courseid
+ * @return array
+ */
+function classjournal_get_course_group_map(int $courseid): array {
+    global $DB;
+
+    $sql = "SELECT gm.id, gm.userid, gm.groupid
+              FROM {groups_members} gm
+              JOIN {groups} g ON g.id = gm.groupid
+             WHERE g.courseid = :courseid";
+    $map = [];
+    foreach ($DB->get_records_sql($sql, ['courseid' => $courseid]) as $record) {
+        $map[(int)$record->userid][(int)$record->groupid] = true;
+    }
+
+    return $map;
+}
+
+/**
+ * Whether a lesson applies to a user with the given group memberships.
+ *
+ * @param stdClass $lesson
+ * @param array $usergroups group ids keyed by id, as produced by classjournal_get_course_group_map
+ * @return bool
+ */
+function classjournal_lesson_applies_to_user(stdClass $lesson, array $usergroups): bool {
+    $groupid = (int)($lesson->groupid ?? 0);
+
+    return $groupid === 0 || isset($usergroups[$groupid]);
+}
+
+/**
+ * Keep only the lessons that apply to a user, preserving keys.
+ *
+ * @param array $lessons
+ * @param array $usergroups group ids keyed by id
+ * @return array
+ */
+function classjournal_filter_lessons_for_user(array $lessons, array $usergroups): array {
+    $filtered = [];
+    foreach ($lessons as $key => $lesson) {
+        if (classjournal_lesson_applies_to_user($lesson, $usergroups)) {
+            $filtered[$key] = $lesson;
+        }
+    }
+
+    return $filtered;
+}
+
+/**
+ * Display name of the group a lesson is restricted to, '' for all participants.
+ *
+ * @param stdClass $lesson
+ * @return string
+ */
+function classjournal_get_lesson_group_name(stdClass $lesson): string {
+    $groupid = (int)($lesson->groupid ?? 0);
+    if (!$groupid) {
+        return '';
+    }
+    $name = groups_get_group_name($groupid);
+
+    return $name === false ? '' : format_string($name);
 }
 
 /**
@@ -408,6 +639,10 @@ function classjournal_set_lesson_grade(stdClass $lesson, int $userid, ?float $gr
         throw new moodle_exception('invalidgrade', 'classjournal', '', format_float($lesson->maxgrade));
     }
 
+    if (!empty($lesson->groupid) && !groups_is_member((int)$lesson->groupid, $userid)) {
+        throw new moodle_exception('usernotinlessongroup', 'classjournal');
+    }
+
     $now = time();
     $params = ['lessonid' => $lesson->id, 'userid' => $userid];
     $record = $DB->get_record('classjournal_grades', $params);
@@ -454,9 +689,12 @@ function classjournal_set_lesson_grades(stdClass $journal, array $lessons, array
     }
 
     $lessonmax = [];
+    $lessongroup = [];
     foreach ($lessons as $lesson) {
         $lessonmax[(int)$lesson->id] = (float)$lesson->maxgrade;
+        $lessongroup[(int)$lesson->id] = (int)($lesson->groupid ?? 0);
     }
+    $groupmap = array_filter($lessongroup) ? classjournal_get_course_group_map((int)$journal->course) : [];
 
     // Validate every grade before touching the database so the save is all-or-nothing.
     foreach ($changes as $change) {
@@ -488,6 +726,10 @@ function classjournal_set_lesson_grades(stdClass $journal, array $lessons, array
         $lessonid = (int)$change->lessonid;
         $userid = (int)$change->userid;
         if (!isset($lessonmax[$lessonid])) {
+            continue;
+        }
+        // A lesson restricted to a group is only gradeable for members of that group.
+        if (!empty($lessongroup[$lessonid]) && !isset($groupmap[$userid][$lessongroup[$lessonid]])) {
             continue;
         }
         $grade = $change->grade;
@@ -658,10 +900,16 @@ function classjournal_get_aggregate_grademax(stdClass $journal): float {
 function classjournal_get_aggregate_grades(stdClass $journal, int $userid = 0): array {
     global $DB;
 
-    $lessons = $DB->get_records('classjournal_lessons', ['journalid' => $journal->id], 'lessondate ASC, id ASC', 'id, maxgrade');
+    $lessons = $DB->get_records(
+        'classjournal_lessons',
+        ['journalid' => $journal->id],
+        'lessondate ASC, id ASC',
+        'id, maxgrade, groupid'
+    );
     if (!$lessons) {
         return [];
     }
+    $groupmap = classjournal_get_course_group_map((int)$journal->course);
 
     [$lessoninsql, $params] = $DB->get_in_or_equal(array_keys($lessons), SQL_PARAMS_NAMED, 'lessonid');
     $where = "lessonid $lessoninsql";
@@ -710,7 +958,9 @@ function classjournal_get_aggregate_grades(stdClass $journal, int $userid = 0): 
 
     $grades = [];
     foreach ($gradesbyuser as $gradeuserid => $gradesbylesson) {
-        $rawgrade = classjournal_calculate_total($journal, $lessons, $gradesbylesson);
+        // Lessons assigned to a group the user is not in never count towards their total.
+        $userlessons = classjournal_filter_lessons_for_user($lessons, $groupmap[(int)$gradeuserid] ?? []);
+        $rawgrade = $userlessons ? classjournal_calculate_total($journal, $userlessons, $gradesbylesson) : null;
         $grades[$gradeuserid] = (object)[
             'userid' => $gradeuserid,
             'rawgrade' => $rawgrade,
@@ -718,7 +968,10 @@ function classjournal_get_aggregate_grades(stdClass $journal, int $userid = 0): 
     }
 
     if ($userid && !isset($grades[$userid])) {
-        $rawgrade = !empty($journal->emptygradeszero) ? classjournal_calculate_total($journal, $lessons, []) : null;
+        $userlessons = classjournal_filter_lessons_for_user($lessons, $groupmap[$userid] ?? []);
+        $rawgrade = (!empty($journal->emptygradeszero) && $userlessons)
+            ? classjournal_calculate_total($journal, $userlessons, [])
+            : null;
         $grades[$userid] = (object)[
             'userid' => $userid,
             'rawgrade' => $rawgrade,

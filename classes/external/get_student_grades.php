@@ -69,6 +69,10 @@ class get_student_grades extends \external_api {
         require_once($CFG->dirroot . '/mod/classjournal/lib.php');
 
         $lessons = $DB->get_records('classjournal_lessons', ['journalid' => $journal->id], 'lessondate ASC, id ASC');
+        // Only lessons that apply to this student's groups are reported, so the
+        // total matches what the Gradebook holds.
+        $groupmap = classjournal_get_course_group_map((int)$journal->course);
+        $lessons = classjournal_filter_lessons_for_user($lessons, $groupmap[(int)$targetuserid] ?? []);
         $records = $DB->get_records('classjournal_grades', ['userid' => $targetuserid]);
         $bylesson = [];
         foreach ($records as $record) {
@@ -98,7 +102,7 @@ class get_student_grades extends \external_api {
             'emptygradeszero' => (int)$journal->emptygradeszero,
             'gradebookmax' => classjournal_get_aggregate_grademax($journal),
             'aggregationdescription' => classjournal_get_aggregation_description($journal),
-            'total' => classjournal_calculate_total($journal, $lessons, $gradesbylesson),
+            'total' => $lessons ? classjournal_calculate_total($journal, $lessons, $gradesbylesson) : null,
             'grades' => $result,
         ];
     }

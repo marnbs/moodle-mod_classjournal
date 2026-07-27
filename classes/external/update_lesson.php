@@ -66,6 +66,12 @@ class update_lesson extends \external_api {
                 VALUE_DEFAULT,
                 null
             ),
+            'groupid' => new \external_value(
+                PARAM_INT,
+                'Group to restrict the lesson to (0 for all participants), omit to keep unchanged',
+                VALUE_DEFAULT,
+                null
+            ),
         ]);
     }
 
@@ -79,6 +85,7 @@ class update_lesson extends \external_api {
      * @param float|null $maxgrade
      * @param int|null $starttime
      * @param int|null $endtime
+     * @param int|null $groupid
      * @return array
      */
     public static function execute(
@@ -88,7 +95,8 @@ class update_lesson extends \external_api {
         ?int $lessondate = null,
         ?float $maxgrade = null,
         ?int $starttime = null,
-        ?int $endtime = null
+        ?int $endtime = null,
+        ?int $groupid = null
     ): array {
         global $DB, $CFG;
 
@@ -100,6 +108,7 @@ class update_lesson extends \external_api {
             'maxgrade' => $maxgrade,
             'starttime' => $starttime,
             'endtime' => $endtime,
+            'groupid' => $groupid,
         ]);
 
         $lesson = $DB->get_record('classjournal_lessons', ['id' => $params['lessonid']], '*', MUST_EXIST);
@@ -110,6 +119,11 @@ class update_lesson extends \external_api {
         require_capability('mod/classjournal:manage', $context);
 
         require_once($CFG->dirroot . '/mod/classjournal/lib.php');
+
+        // In separate groups mode a lesson of another group is out of reach.
+        if (!classjournal_can_access_lesson($cm, $context, $lesson)) {
+            throw new \required_capability_exception($context, 'moodle/site:accessallgroups', 'nopermissions', '');
+        }
 
         // Null parameters leave the existing value untouched.
         $name = $params['name'] === null ? $lesson->name : $params['name'];
@@ -127,6 +141,15 @@ class update_lesson extends \external_api {
             throw new \moodle_exception('invalidgrade', 'classjournal', '', $maxgrade);
         }
 
+        // The caller may only move a lesson to a group they are allowed to see.
+        $groupid = $params['groupid'] === null ? null : (int)$params['groupid'];
+        if ($groupid) {
+            $assignablegroups = classjournal_get_assignable_groups($cm, $context);
+            if (!array_key_exists($groupid, $assignablegroups)) {
+                throw new \moodle_exception('invalidlessongroup', 'classjournal');
+            }
+        }
+
         $updated = classjournal_update_lesson(
             $journal,
             (int)$lesson->id,
@@ -136,7 +159,8 @@ class update_lesson extends \external_api {
             $maxgrade,
             (int)$lesson->scaleid,
             $starttime,
-            $endtime
+            $endtime,
+            $groupid
         );
 
         return [
@@ -148,6 +172,7 @@ class update_lesson extends \external_api {
             'maxgrade' => (float)$updated->maxgrade,
             'starttime' => $updated->starttime === null ? null : (int)$updated->starttime,
             'endtime' => $updated->endtime === null ? null : (int)$updated->endtime,
+            'groupid' => (int)$updated->groupid,
         ];
     }
 
@@ -178,6 +203,7 @@ class update_lesson extends \external_api {
                 null,
                 NULL_ALLOWED
             ),
+            'groupid' => new \external_value(PARAM_INT, 'Group the lesson is restricted to, 0 for all participants'),
         ]);
     }
 }

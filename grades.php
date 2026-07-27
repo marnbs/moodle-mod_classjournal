@@ -73,6 +73,13 @@ if ($dateto !== '' && ($tots = strtotime($dateto . ' 23:59:59'))) {
 
 $where = ['journalid = :journalid'];
 $params = ['journalid' => $journal->id];
+// In separate groups mode a teacher only grades the lessons of their own groups.
+$visiblegroupids = classjournal_get_visible_group_ids($cm, $context);
+[$groupsql, $groupparams] = classjournal_group_visibility_sql($visiblegroupids);
+if ($groupsql !== '') {
+    $where[] = $groupsql;
+    $params += $groupparams;
+}
 if ($q !== '') {
     $where[] = $DB->sql_like('name', ':q', false);
     $params['q'] = '%' . $DB->sql_like_escape($q) . '%';
@@ -101,6 +108,8 @@ $students = classjournal_get_student_users(
     'u.id, u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic, u.middlename, u.alternatename, u.email',
     'u.lastname, u.firstname'
 );
+$groupmap = classjournal_get_course_group_map($course->id);
+$students = classjournal_filter_students_by_group($cm, $context, $students, $groupmap);
 
 if (data_submitted() && confirm_sesskey()) {
     $submittedgrades = $_POST['grade'] ?? [];
@@ -108,7 +117,12 @@ if (data_submitted() && confirm_sesskey()) {
 
     $changes = [];
     foreach ($students as $student) {
+        $usergroups = $groupmap[(int)$student->id] ?? [];
         foreach ($lessons as $lesson) {
+            // Cells outside the lesson's group are never rendered, so never saved either.
+            if (!classjournal_lesson_applies_to_user($lesson, $usergroups)) {
+                continue;
+            }
             $rawgrade = $submittedgrades[$student->id][$lesson->id] ?? '';
             $rawgrade = is_array($rawgrade) ? '' : clean_param($rawgrade, PARAM_RAW_TRIMMED);
             $grade = $rawgrade === '' ? null : (float)$rawgrade;
@@ -218,6 +232,9 @@ foreach ($lessons as $lesson) {
         $lessonmeta .= ', ' . $lessontime;
     }
     $lessonmeta .= ' / ' . $maxlabel;
+    if ($groupname = classjournal_get_lesson_group_name($lesson)) {
+        $lessonmeta .= ' / ' . $groupname;
+    }
     $fill = html_writer::tag('button', get_string('fillcolumn', 'classjournal'), [
         'type' => 'button',
         'class' => 'btn btn-link cj-fill',
@@ -232,9 +249,19 @@ echo html_writer::end_tag('thead');
 echo html_writer::start_tag('tbody');
 
 foreach ($students as $student) {
+    $usergroups = $groupmap[(int)$student->id] ?? [];
     echo html_writer::start_tag('tr');
     echo html_writer::tag('th', fullname($student), ['class' => 'cj-user']);
     foreach ($lessons as $lesson) {
+        // Students outside the lesson's group get no inputs at all.
+        if (!classjournal_lesson_applies_to_user($lesson, $usergroups)) {
+            echo html_writer::tag(
+                'td',
+                html_writer::span(get_string('lessonnotforuser', 'classjournal'), 'text-muted'),
+                ['class' => 'cj-notingroup']
+            );
+            continue;
+        }
         $record = $grades[$student->id][$lesson->id] ?? null;
         $gradevalue = $record && $record->grade !== null ? $record->grade : '';
         $commentvalue = $record ? $record->comment : '';

@@ -52,18 +52,37 @@ $PAGE->set_context($context);
 
 $canmanage = has_capability('mod/classjournal:manage', $context);
 $canviewall = has_capability('mod/classjournal:viewallgrades', $context);
+// Lessons assigned to a group are only visible to members of that group, and in
+// separate groups mode to teachers of that group.
+$visiblegroupids = classjournal_get_visible_group_ids($cm, $context);
+[$groupsql, $groupparams] = classjournal_group_visibility_sql($visiblegroupids);
 
 classjournal_ensure_grade_item($journal);
 classjournal_view($journal, $course, $cm, $context);
+
+// A teacher limited to their own groups must not reach another group's lesson by id.
+if ($canmanage && $lessonid && in_array($action, ['edit', 'delete'], true)) {
+    $targetlesson = $DB->get_record(
+        'classjournal_lessons',
+        ['id' => $lessonid, 'journalid' => $journal->id],
+        '*',
+        MUST_EXIST
+    );
+    if (!classjournal_can_access_lesson($cm, $context, $targetlesson)) {
+        throw new moodle_exception('nopermissions', 'error', $baseurl, get_string('editlesson', 'classjournal'));
+    }
+}
 
 $lessonform = null;
 if ($canmanage && ($action === 'add' || ($action === 'edit' && $lessonid))) {
     $editing = ($action === 'edit');
     $formurl = new moodle_url($baseurl, ['action' => $action, 'lessonid' => $lessonid]);
+    $assignablegroups = classjournal_get_assignable_groups($cm, $context);
     $lessonform = new \mod_classjournal\form\lesson_form($formurl, [
         'isedit' => $editing,
         'courseid' => $course->id,
         'defaultmaxgrade' => get_config('mod_classjournal', 'defaultmaxgrade') ?: 100,
+        'groups' => $assignablegroups,
     ]);
 
     if ($lessonform->is_cancelled()) {
@@ -77,6 +96,11 @@ if ($canmanage && ($action === 'add' || ($action === 'edit' && $lessonid))) {
             $starttime = (int)$data->starthour * 3600 + (int)$data->startminute * 60;
             $endtime = (int)$data->endhour * 3600 + (int)$data->endminute * 60;
         }
+        // Never trust a submitted group the teacher is not allowed to assign to.
+        $groupid = (int)($data->groupid ?? 0);
+        if ($groupid && !isset($assignablegroups[$groupid])) {
+            $groupid = 0;
+        }
         if ($editing) {
             classjournal_update_lesson(
                 $journal,
@@ -87,7 +111,8 @@ if ($canmanage && ($action === 'add' || ($action === 'edit' && $lessonid))) {
                 $maxgrade,
                 $scaleid,
                 $starttime,
-                $endtime
+                $endtime,
+                $groupid
             );
         } else {
             $repeatcount = max(1, min(100, (int)($data->repeatcount ?? 1)));
@@ -102,7 +127,9 @@ if ($canmanage && ($action === 'add' || ($action === 'edit' && $lessonid))) {
                     $maxgrade,
                     $scaleid,
                     $starttime,
-                    $endtime
+                    $endtime,
+                    null,
+                    $groupid
                 );
             }
         }
@@ -117,6 +144,7 @@ if ($canmanage && ($action === 'add' || ($action === 'edit' && $lessonid))) {
             'startminute' => isset($existing->starttime) ? intdiv((int)$existing->starttime % 3600, 60) : 0,
             'endhour' => isset($existing->endtime) ? intdiv((int)$existing->endtime, 3600) : 0,
             'endminute' => isset($existing->endtime) ? intdiv((int)$existing->endtime % 3600, 60) : 0,
+            'groupid' => (int)$existing->groupid,
             'gradetype' => $existing->scaleid ? 'scale' : 'point',
             'maxgrade' => $existing->scaleid ? '' : $existing->maxgrade,
             'scaleid' => (int)$existing->scaleid,
@@ -176,7 +204,12 @@ if ($canmanage && $action === 'changedate' && confirm_sesskey()) {
     } else if ($data = $dateform->get_data()) {
         [$insql, $inparams] = $DB->get_in_or_equal($selectedlessons, SQL_PARAMS_NAMED, 'lessonid');
         $inparams['journalid'] = $journal->id;
-        $lessonstomove = $DB->get_records_select('classjournal_lessons', "journalid = :journalid AND id $insql", $inparams);
+        $movewhere = "journalid = :journalid AND id $insql";
+        if ($groupsql !== '') {
+            $movewhere .= ' AND ' . $groupsql;
+            $inparams += $groupparams;
+        }
+        $lessonstomove = $DB->get_records_select('classjournal_lessons', $movewhere, $inparams);
         foreach ($lessonstomove as $lesson) {
             $lesson->lessondate = (int)$data->lessondate;
             $lesson->timemodified = time();
@@ -201,9 +234,14 @@ if ($canmanage && $action === 'bulkdelete' && confirm_sesskey()) {
 
     [$insql, $inparams] = $DB->get_in_or_equal($selectedlessons, SQL_PARAMS_NAMED, 'lessonid');
     $inparams['journalid'] = $journal->id;
+    $deletewhere = "journalid = :journalid AND id $insql";
+    if ($groupsql !== '') {
+        $deletewhere .= ' AND ' . $groupsql;
+        $inparams += $groupparams;
+    }
     $lessonsfordelete = $DB->get_records_select(
         'classjournal_lessons',
-        "journalid = :journalid AND id $insql",
+        $deletewhere,
         $inparams,
         'lessondate ASC, id ASC'
     );
@@ -245,6 +283,10 @@ $view = in_array($view, $validviews, true) ? $view : 'all';
 
 $where = ['journalid = :journalid'];
 $params = ['journalid' => $journal->id];
+if ($groupsql !== '') {
+    $where[] = $groupsql;
+    $params += $groupparams;
+}
 if ($q !== '') {
     $where[] = $DB->sql_like('name', ':q', false);
     $params['q'] = '%' . $DB->sql_like_escape($q) . '%';
@@ -311,14 +353,21 @@ if ($canmanage) {
         'aria-label' => get_string('selectall'),
     ]);
 }
-$columns = array_merge($columns, ['lessondate', 'lessontime', 'name', 'maxgrade', 'description']);
+$columns = array_merge($columns, ['lessondate', 'lessontime', 'name', 'maxgrade']);
 $headers = array_merge($headers, [
     get_string('lessondate', 'classjournal'),
     get_string('lessontime', 'classjournal'),
     get_string('lessonname', 'classjournal'),
     get_string('maxgrade', 'classjournal'),
-    get_string('description', 'classjournal'),
 ]);
+// The group column only earns its place when the course has groups.
+$hasgroups = (bool)groups_get_all_groups($course->id);
+if ($hasgroups) {
+    $columns[] = 'groupid';
+    $headers[] = get_string('lessongroup', 'classjournal');
+}
+$columns[] = 'description';
+$headers[] = get_string('description', 'classjournal');
 if ($canmanage) {
     $columns[] = 'actions';
     $headers[] = get_string('actions');
@@ -334,6 +383,9 @@ $table->no_sorting('select');
 $table->no_sorting('actions');
 $table->no_sorting('description');
 $table->no_sorting('lessontime');
+if ($hasgroups) {
+    $table->no_sorting('groupid');
+}
 $table->sortable(true, 'lessondate', SORT_ASC);
 $table->collapsible(false);
 $table->set_attribute('class', 'generaltable table table-striped');
@@ -362,12 +414,24 @@ if ($canmanage) {
     echo html_writer::end_tag('form');
 }
 
-// Students see their grades across every lesson, independent of the list paging above.
-$lessons = $canviewall ? [] : $DB->get_records(
-    'classjournal_lessons',
-    ['journalid' => $journal->id],
-    'lessondate ASC, id ASC'
-);
+// Students see their grades across every lesson that applies to them, independent
+// of the list paging above.
+$lessons = [];
+if (!$canviewall) {
+    $lessonwhere = 'journalid = :journalid';
+    $lessonparams = ['journalid' => $journal->id];
+    [$mygroupsql, $mygroupparams] = classjournal_group_visibility_sql($visiblegroupids, 'groupid', 'mygroup');
+    if ($mygroupsql !== '') {
+        $lessonwhere .= ' AND ' . $mygroupsql;
+        $lessonparams += $mygroupparams;
+    }
+    $lessons = $DB->get_records_select(
+        'classjournal_lessons',
+        $lessonwhere,
+        $lessonparams,
+        'lessondate ASC, id ASC'
+    );
+}
 
 if (!$canviewall && $journal->showallgrades && $lessons) {
     $students = classjournal_get_student_users(
@@ -375,6 +439,8 @@ if (!$canviewall && $journal->showallgrades && $lessons) {
         'u.id, u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic, u.middlename, u.alternatename',
         'u.lastname, u.firstname'
     );
+    $groupmap = classjournal_get_course_group_map($course->id);
+    $students = classjournal_filter_students_by_group($cm, $context, $students, $groupmap);
     [$insql, $params] = $DB->get_in_or_equal(array_keys($lessons), SQL_PARAMS_NAMED, 'lessonid');
     $records = $DB->get_records_select('classjournal_grades', "lessonid $insql", $params);
     $grades = [];
@@ -393,12 +459,18 @@ if (!$canviewall && $journal->showallgrades && $lessons) {
     foreach ($students as $student) {
         $gradesbylesson = [];
         $row = [fullname($student)];
+        $usergroups = $groupmap[(int)$student->id] ?? [];
+        $studentlessons = classjournal_filter_lessons_for_user($lessons, $usergroups);
         foreach ($lessons as $lesson) {
+            if (!isset($studentlessons[$lesson->id])) {
+                $row[] = html_writer::span(get_string('lessonnotforuser', 'classjournal'), 'text-muted');
+                continue;
+            }
             $grade = $grades[$student->id][$lesson->id] ?? null;
             $gradesbylesson[$lesson->id] = $grade;
             $row[] = classjournal_format_grade($lesson, $grade === null ? null : (float)$grade);
         }
-        $total = classjournal_calculate_total($journal, $lessons, $gradesbylesson);
+        $total = $studentlessons ? classjournal_calculate_total($journal, $studentlessons, $gradesbylesson) : null;
         $row[] = $total === null ? '-' : format_float($total);
         $alltable->data[] = $row;
     }

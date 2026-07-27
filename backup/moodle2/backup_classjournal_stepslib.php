@@ -46,7 +46,7 @@ class backup_classjournal_activity_structure_step extends backup_activity_struct
         $lessons = new backup_nested_element('lessons');
         $lesson = new backup_nested_element('lesson', ['id'], [
             'name', 'description', 'lessondate', 'starttime', 'endtime',
-            'maxgrade', 'scaleid', 'timecreated', 'timemodified',
+            'maxgrade', 'scaleid', 'groupid', 'timecreated', 'timemodified',
         ]);
 
         $grades = new backup_nested_element('grades');
@@ -71,6 +71,7 @@ class backup_classjournal_activity_structure_step extends backup_activity_struct
         }
 
         // Define id annotations.
+        $lesson->annotate_ids('group', 'groupid');
         $grade->annotate_ids('user', 'userid');
 
         // Define file annotations (intro uses the standard mod intro filearea).

@@ -35,12 +35,25 @@ $context = context_module::instance($cm->id);
 require_login($course, true, $cm);
 require_capability('mod/classjournal:grade', $context);
 
-$lessons = $DB->get_records('classjournal_lessons', ['journalid' => $journal->id], 'lessondate ASC, id ASC');
+// In separate groups mode a teacher only exports the lessons of their own groups.
+$lessonwhere = 'journalid = :journalid';
+$lessonparams = ['journalid' => $journal->id];
+[$groupsql, $groupparams] = classjournal_group_visibility_sql(
+    classjournal_get_visible_group_ids($cm, $context)
+);
+if ($groupsql !== '') {
+    $lessonwhere .= ' AND ' . $groupsql;
+    $lessonparams += $groupparams;
+}
+$lessons = $DB->get_records_select('classjournal_lessons', $lessonwhere, $lessonparams, 'lessondate ASC, id ASC');
 $students = classjournal_get_student_users(
     $context,
     'u.id, u.firstname, u.lastname, u.firstnamephonetic, u.lastnamephonetic, u.middlename, u.alternatename',
     'u.lastname, u.firstname'
 );
+
+$groupmap = classjournal_get_course_group_map($course->id);
+$students = classjournal_filter_students_by_group($cm, $context, $students, $groupmap);
 
 $grades = [];
 if ($lessons) {
@@ -69,7 +82,13 @@ foreach ($students as $student) {
         'fullname' => fullname($student),
     ];
     $gradesbylesson = [];
+    $studentlessons = classjournal_filter_lessons_for_user($lessons, $groupmap[(int)$student->id] ?? []);
     foreach ($lessons as $lesson) {
+        // Lessons for other groups stay blank and are never re-imported for this student.
+        if (!isset($studentlessons[$lesson->id])) {
+            $row['l' . $lesson->id] = '';
+            continue;
+        }
         $grade = $grades[$student->id][$lesson->id] ?? null;
         $gradesbylesson[$lesson->id] = $grade;
         if ($grade === null) {
@@ -81,7 +100,7 @@ foreach ($students as $student) {
             $row['l' . $lesson->id] = (float)$grade;
         }
     }
-    $total = classjournal_calculate_total($journal, $lessons, $gradesbylesson);
+    $total = $studentlessons ? classjournal_calculate_total($journal, $studentlessons, $gradesbylesson) : null;
     $row['total'] = $total === null ? '' : (float)$total;
     $rows[] = $row;
 }

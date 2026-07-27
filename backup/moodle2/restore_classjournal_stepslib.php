@@ -84,6 +84,9 @@ class restore_classjournal_activity_structure_step extends restore_activity_stru
         $oldid = $data->id;
 
         $data->journalid = $this->get_new_parentid('classjournal');
+        // Groups may not be restored (e.g. a course without user data), in which
+        // case the lesson falls back to being visible to all participants.
+        $data->groupid = empty($data->groupid) ? 0 : (int)($this->get_mappingid('group', $data->groupid) ?: 0);
         $data->lessondate = $this->apply_date_offset($data->lessondate);
         $data->timecreated = $this->apply_date_offset($data->timecreated);
         $data->timemodified = $this->apply_date_offset($data->timemodified);

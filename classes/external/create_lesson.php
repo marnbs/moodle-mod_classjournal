@@ -62,6 +62,12 @@ class create_lesson extends \external_api {
                 VALUE_DEFAULT,
                 ''
             ),
+            'groupid' => new \external_value(
+                PARAM_INT,
+                'Restrict the lesson to this group, 0 for all participants',
+                VALUE_DEFAULT,
+                0
+            ),
         ]);
     }
 
@@ -76,6 +82,7 @@ class create_lesson extends \external_api {
      * @param int|null $starttime
      * @param int|null $endtime
      * @param string $clientrequestid
+     * @param int $groupid
      * @return array
      */
     public static function execute(
@@ -86,7 +93,8 @@ class create_lesson extends \external_api {
         float $maxgrade = 100,
         ?int $starttime = null,
         ?int $endtime = null,
-        string $clientrequestid = ''
+        string $clientrequestid = '',
+        int $groupid = 0
     ): array {
         global $DB, $CFG;
 
@@ -99,6 +107,7 @@ class create_lesson extends \external_api {
             'starttime' => $starttime,
             'endtime' => $endtime,
             'clientrequestid' => $clientrequestid,
+            'groupid' => $groupid,
         ]);
 
         $cm = get_coursemodule_from_id('classjournal', $params['cmid'], 0, false, MUST_EXIST);
@@ -112,6 +121,15 @@ class create_lesson extends \external_api {
         }
 
         require_once($CFG->dirroot . '/mod/classjournal/lib.php');
+
+        // The caller may only restrict a lesson to a group they are allowed to see.
+        $lessongroupid = (int)$params['groupid'];
+        if ($lessongroupid) {
+            $assignablegroups = classjournal_get_assignable_groups($cm, $context);
+            if (!array_key_exists($lessongroupid, $assignablegroups)) {
+                throw new \moodle_exception('invalidlessongroup', 'classjournal');
+            }
+        }
 
         // Idempotency: if a lesson with this client request id already exists in the
         // journal, return it unchanged instead of creating a duplicate.
@@ -135,7 +153,8 @@ class create_lesson extends \external_api {
             0,
             $params['starttime'] === null ? null : (int)$params['starttime'],
             $params['endtime'] === null ? null : (int)$params['endtime'],
-            $clientrequestid
+            $clientrequestid,
+            $lessongroupid
         );
 
         return self::format_lesson($cm, $lesson);
@@ -158,6 +177,7 @@ class create_lesson extends \external_api {
             'maxgrade' => (float)$lesson->maxgrade,
             'starttime' => $lesson->starttime === null ? null : (int)$lesson->starttime,
             'endtime' => $lesson->endtime === null ? null : (int)$lesson->endtime,
+            'groupid' => (int)$lesson->groupid,
         ];
     }
 
@@ -188,6 +208,7 @@ class create_lesson extends \external_api {
                 null,
                 NULL_ALLOWED
             ),
+            'groupid' => new \external_value(PARAM_INT, 'Group the lesson is restricted to, 0 for all participants'),
         ]);
     }
 }

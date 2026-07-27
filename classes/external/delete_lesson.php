@@ -63,6 +63,11 @@ class delete_lesson extends \external_api {
 
         require_once($CFG->dirroot . '/mod/classjournal/lib.php');
 
+        // In separate groups mode a lesson of another group is out of reach.
+        if (!classjournal_can_access_lesson($cm, $context, $lesson)) {
+            throw new \required_capability_exception($context, 'moodle/site:accessallgroups', 'nopermissions', '');
+        }
+
         classjournal_delete_lesson($lesson);
 
         return [

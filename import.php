@@ -42,7 +42,17 @@ $PAGE->set_context($context);
 $PAGE->set_title(format_string($journal->name) . ': ' . get_string('import', 'classjournal'));
 $PAGE->set_heading($course->fullname);
 
-$lessons = $DB->get_records('classjournal_lessons', ['journalid' => $journal->id], 'lessondate ASC, id ASC');
+// In separate groups mode a teacher only imports into the lessons of their own groups.
+$lessonwhere = 'journalid = :journalid';
+$lessonparams = ['journalid' => $journal->id];
+[$groupsql, $groupparams] = classjournal_group_visibility_sql(
+    classjournal_get_visible_group_ids($cm, $context)
+);
+if ($groupsql !== '') {
+    $lessonwhere .= ' AND ' . $groupsql;
+    $lessonparams += $groupparams;
+}
+$lessons = $DB->get_records_select('classjournal_lessons', $lessonwhere, $lessonparams, 'lessondate ASC, id ASC');
 
 $mform = new \mod_classjournal\form\import_form($url, ['id' => $cm->id]);
 
@@ -77,9 +87,16 @@ if ($mform->is_cancelled()) {
         redirect($url, get_string('importbadformat', 'classjournal'), null, \core\output\notification::NOTIFY_ERROR);
     }
 
-    // Only enrolled students may receive grades.
+    // Only enrolled students the teacher may grade receive grades.
+    $groupmap = classjournal_get_course_group_map($course->id);
+    $importstudents = classjournal_filter_students_by_group(
+        $cm,
+        $context,
+        classjournal_get_student_users($context, 'u.id'),
+        $groupmap
+    );
     $studentids = [];
-    foreach (classjournal_get_student_users($context, 'u.id') as $student) {
+    foreach ($importstudents as $student) {
         $studentids[(int)$student->id] = true;
     }
 

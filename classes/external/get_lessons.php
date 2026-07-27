@@ -52,13 +52,26 @@ class get_lessons extends \external_api {
      * @return array
      */
     public static function execute(int $cmid): array {
-        global $DB;
+        global $DB, $CFG;
 
         ['cmid' => $cmid] = self::validate_parameters(self::execute_parameters(), ['cmid' => $cmid]);
         [$cm, $course, $journal, $context] = self::get_journal_context($cmid);
         require_capability('mod/classjournal:view', $context);
 
-        $lessons = $DB->get_records('classjournal_lessons', ['journalid' => $journal->id], 'lessondate ASC, id ASC');
+        require_once($CFG->dirroot . '/mod/classjournal/lib.php');
+
+        // Lessons restricted to a group are only listed for users who can see that group.
+        $where = 'journalid = :journalid';
+        $params = ['journalid' => $journal->id];
+        [$groupsql, $groupparams] = classjournal_group_visibility_sql(
+            classjournal_get_visible_group_ids($cm, $context)
+        );
+        if ($groupsql !== '') {
+            $where .= ' AND ' . $groupsql;
+            $params += $groupparams;
+        }
+
+        $lessons = $DB->get_records_select('classjournal_lessons', $where, $params, 'lessondate ASC, id ASC');
         $result = [];
         foreach ($lessons as $lesson) {
             $result[] = [
@@ -69,6 +82,7 @@ class get_lessons extends \external_api {
                 'maxgrade' => (float)$lesson->maxgrade,
                 'starttime' => $lesson->starttime === null ? null : (int)$lesson->starttime,
                 'endtime' => $lesson->endtime === null ? null : (int)$lesson->endtime,
+                'groupid' => (int)$lesson->groupid,
             ];
         }
 
@@ -101,6 +115,7 @@ class get_lessons extends \external_api {
                 null,
                 NULL_ALLOWED
             ),
+            'groupid' => new \external_value(PARAM_INT, 'Group the lesson is restricted to, 0 for all participants'),
         ]));
     }
 

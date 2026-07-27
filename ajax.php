@@ -48,6 +48,14 @@ if (!classjournal_is_student_user($context, $userid)) {
     throw new moodle_exception('notenrolled', 'moodle');
 }
 
+// A lesson restricted to a group is only gradeable by, and for, that group.
+if (!classjournal_can_access_lesson($cm, $context, $lesson)) {
+    throw new moodle_exception('nopermissions', 'error', '', get_string('gradelesson', 'classjournal'));
+}
+if (!empty($lesson->groupid) && !groups_is_member((int)$lesson->groupid, $userid)) {
+    throw new moodle_exception('usernotinlessongroup', 'classjournal');
+}
+
 $grade = ($graderaw === '') ? null : (float)$graderaw;
 
 classjournal_set_lesson_grades($journal, [$lesson], [

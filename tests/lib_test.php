@@ -66,7 +66,8 @@ final class lib_test extends \advanced_testcase {
         $this->assertTrue(classjournal_supports(FEATURE_MOD_INTRO));
         $this->assertTrue(classjournal_supports(FEATURE_GRADE_HAS_GRADE));
         $this->assertTrue(classjournal_supports(FEATURE_BACKUP_MOODLE2));
-        $this->assertNull(classjournal_supports(FEATURE_GROUPS));
+        $this->assertTrue(classjournal_supports(FEATURE_GROUPS));
+        $this->assertNull(classjournal_supports(FEATURE_GROUPINGS));
     }
 
     /**
@@ -506,5 +507,155 @@ final class lib_test extends \advanced_testcase {
 
         $this->assertFalse($DB->record_exists('event', ['id' => $eventid]));
         $this->assertEquals(0, (int)$DB->get_field('classjournal_lessons', 'eventid', ['id' => $lesson->id]));
+    }
+
+    /**
+     * A lesson assigned to a group only counts for the members of that group.
+     *
+     * @covers ::classjournal_create_lesson
+     * @covers ::classjournal_filter_lessons_for_user
+     * @covers ::classjournal_get_aggregate_grades
+     */
+    public function test_group_lesson_aggregate(): void {
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_classjournal');
+        $journal = $this->getDataGenerator()->create_module('classjournal', [
+            'course' => $course->id,
+            'aggregation' => 'sum',
+        ]);
+        $groupa = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+        $groupb = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+        $membera = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $memberb = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $this->getDataGenerator()->create_group_member(['groupid' => $groupa->id, 'userid' => $membera->id]);
+        $this->getDataGenerator()->create_group_member(['groupid' => $groupb->id, 'userid' => $memberb->id]);
+
+        $shared = $generator->create_lesson($journal, ['maxgrade' => 10]);
+        $onlya = $generator->create_lesson($journal, ['maxgrade' => 10, 'groupid' => $groupa->id]);
+        $this->assertEquals($groupa->id, $onlya->groupid);
+
+        classjournal_set_lesson_grade($shared, $membera->id, 5.0);
+        classjournal_set_lesson_grade($shared, $memberb->id, 5.0);
+        classjournal_set_lesson_grade($onlya, $membera->id, 7.0);
+
+        $grades = classjournal_get_aggregate_grades($journal);
+        $this->assertEqualsWithDelta(12.0, (float)$grades[$membera->id]->rawgrade, 0.0001);
+        $this->assertEqualsWithDelta(5.0, (float)$grades[$memberb->id]->rawgrade, 0.0001);
+    }
+
+    /**
+     * With emptygradeszero, a lesson for another group is not a zero for outsiders.
+     *
+     * @covers ::classjournal_get_aggregate_grades
+     */
+    public function test_group_lesson_not_counted_as_zero(): void {
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_classjournal');
+        $journal = $this->getDataGenerator()->create_module('classjournal', [
+            'course' => $course->id,
+            'aggregation' => 'avg',
+            'emptygradeszero' => 1,
+        ]);
+        $group = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+        $outsider = $this->getDataGenerator()->create_and_enrol($course, 'student');
+
+        $shared = $generator->create_lesson($journal, ['maxgrade' => 10]);
+        $generator->create_lesson($journal, ['maxgrade' => 10, 'groupid' => $group->id]);
+        classjournal_set_lesson_grade($shared, $outsider->id, 10.0);
+
+        // Only the shared lesson applies, so the average is 100%, not 50%.
+        $grades = classjournal_get_aggregate_grades($journal);
+        $this->assertEqualsWithDelta(100.0, (float)$grades[$outsider->id]->rawgrade, 0.0001);
+    }
+
+    /**
+     * Students outside the lesson's group cannot be graded on it.
+     *
+     * @covers ::classjournal_set_lesson_grade
+     * @covers ::classjournal_set_lesson_grades
+     */
+    public function test_group_lesson_rejects_outsiders(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_classjournal');
+        $journal = $this->getDataGenerator()->create_module('classjournal', ['course' => $course->id]);
+        $group = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+        $outsider = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $lesson = $generator->create_lesson($journal, ['maxgrade' => 10, 'groupid' => $group->id]);
+
+        // The bulk path silently skips the cell, which is what the grid renders.
+        $written = classjournal_set_lesson_grades($journal, [$lesson], [
+            (object)['lessonid' => $lesson->id, 'userid' => $outsider->id, 'grade' => 5.0, 'comment' => ''],
+        ]);
+        $this->assertSame(0, $written);
+        $this->assertEquals(0, $DB->count_records('classjournal_grades'));
+
+        $this->expectException(\moodle_exception::class);
+        classjournal_set_lesson_grade($lesson, $outsider->id, 5.0);
+    }
+
+    /**
+     * A group lesson publishes a group calendar event instead of a course one.
+     *
+     * @covers ::classjournal_sync_lesson_event
+     */
+    public function test_group_lesson_calendar_event(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_classjournal');
+        $journal = $this->getDataGenerator()->create_module('classjournal', [
+            'course' => $course->id,
+            'calendarevents' => 1,
+        ]);
+        $group = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+
+        $lesson = $generator->create_lesson($journal, ['maxgrade' => 10, 'groupid' => $group->id]);
+        $eventid = (int)$DB->get_field('classjournal_lessons', 'eventid', ['id' => $lesson->id]);
+        $event = $DB->get_record('event', ['id' => $eventid], '*', MUST_EXIST);
+        $this->assertSame('group', $event->eventtype);
+        $this->assertEquals($group->id, $event->groupid);
+
+        // Moving the lesson back to all participants turns it into a course event.
+        classjournal_update_lesson(
+            $journal,
+            (int)$lesson->id,
+            $lesson->name,
+            '',
+            (int)$lesson->lessondate,
+            (float)$lesson->maxgrade,
+            0,
+            null,
+            null,
+            0
+        );
+        $event = $DB->get_record('event', ['id' => $eventid], '*', MUST_EXIST);
+        $this->assertSame('course', $event->eventtype);
+        $this->assertEquals(0, (int)$event->groupid);
+    }
+
+    /**
+     * A group from another course is never stored on a lesson.
+     *
+     * @covers ::classjournal_normalise_lesson_group
+     */
+    public function test_lesson_group_must_belong_to_course(): void {
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $othercourse = $this->getDataGenerator()->create_course();
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_classjournal');
+        $journal = $this->getDataGenerator()->create_module('classjournal', ['course' => $course->id]);
+        $foreigngroup = $this->getDataGenerator()->create_group(['courseid' => $othercourse->id]);
+
+        $lesson = $generator->create_lesson($journal, ['maxgrade' => 10, 'groupid' => $foreigngroup->id]);
+        $this->assertEquals(0, (int)$lesson->groupid);
     }
 }

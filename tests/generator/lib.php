@@ -56,7 +56,7 @@ class mod_classjournal_generator extends testing_module_generator {
      * Create a lesson inside a journal instance.
      *
      * @param stdClass $journal journal record as returned by create_instance()
-     * @param array $record overrides for name, description, lessondate, maxgrade
+     * @param array $record overrides for name, description, lessondate, maxgrade, scaleid, groupid
      * @return stdClass the created lesson record
      */
     public function create_lesson(stdClass $journal, array $record = []): stdClass {
@@ -69,6 +69,7 @@ class mod_classjournal_generator extends testing_module_generator {
             'lessondate' => time(),
             'maxgrade' => 10,
             'scaleid' => 0,
+            'groupid' => 0,
         ];
 
         return classjournal_create_lesson(
@@ -77,7 +78,11 @@ class mod_classjournal_generator extends testing_module_generator {
             $record['description'],
             (int)$record['lessondate'],
             (float)$record['maxgrade'],
-            (int)$record['scaleid']
+            (int)$record['scaleid'],
+            null,
+            null,
+            null,
+            (int)$record['groupid']
         );
     }
 }
