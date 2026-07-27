@@ -323,8 +323,8 @@ function classjournal_get_assignable_groups($cm, context_module $context, int $u
     global $USER;
 
     $userid = $userid ?: (int)$USER->id;
-    if (groups_get_activity_groupmode($cm) == SEPARATEGROUPS &&
-            !has_capability('moodle/site:accessallgroups', $context, $userid)) {
+    $separategroups = groups_get_activity_groupmode($cm) == SEPARATEGROUPS;
+    if ($separategroups && !has_capability('moodle/site:accessallgroups', $context, $userid)) {
         return groups_get_all_groups($cm->course, $userid);
     }
 
@@ -350,8 +350,9 @@ function classjournal_get_visible_group_ids($cm, context_module $context, int $u
     $canviewall = has_capability('mod/classjournal:viewallgrades', $context, $userid) ||
         has_capability('mod/classjournal:manage', $context, $userid);
 
-    if ($canviewall && (groups_get_activity_groupmode($cm) != SEPARATEGROUPS ||
-            has_capability('moodle/site:accessallgroups', $context, $userid))) {
+    $seesallgroups = groups_get_activity_groupmode($cm) != SEPARATEGROUPS ||
+        has_capability('moodle/site:accessallgroups', $context, $userid);
+    if ($canviewall && $seesallgroups) {
         return null;
     }
 
@@ -404,8 +405,9 @@ function classjournal_filter_students_by_group(
     global $USER;
 
     $userid = $userid ?: (int)$USER->id;
-    if (groups_get_activity_groupmode($cm) != SEPARATEGROUPS ||
-            has_capability('moodle/site:accessallgroups', $context, $userid)) {
+    $seesallgroups = groups_get_activity_groupmode($cm) != SEPARATEGROUPS ||
+        has_capability('moodle/site:accessallgroups', $context, $userid);
+    if ($seesallgroups) {
         return $students;
     }
 
