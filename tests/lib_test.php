@@ -83,6 +83,23 @@ final class lib_test extends \advanced_testcase {
     }
 
     /**
+     * A point grade is displayed against the lesson maximum, not the journal maximum.
+     *
+     * @covers ::classjournal_format_grade
+     */
+    public function test_format_point_grade_uses_lesson_maximum(): void {
+        $lesson = (object)[
+            'id' => 1,
+            'maxgrade' => 25,
+            'scaleid' => 0,
+        ];
+
+        // The journal default is 100, but it is deliberately absent here: formatting
+        // a lesson grade must only depend on that lesson's own maximum.
+        $this->assertSame('20 / 25', classjournal_format_grade($lesson, 20.0));
+    }
+
+    /**
      * Sum aggregation adds raw lesson points.
      *
      * @covers ::classjournal_calculate_total
