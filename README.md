@@ -28,6 +28,7 @@ Class journal is a Moodle activity module for lesson-based grading. Teachers add
 - Grade grid with colour indication, AJAX autosave, and a per-column fill button.
 - Export the grid to Excel and re-import it to update grades in bulk.
 - Gradebook sync: one Moodle grade item per journal with sum/average aggregation.
+- Configurable display precision from 0 to 5 decimal places (one by default).
 - Configurable final Gradebook maximum, for example fixed 100-point output while lessons use 5, 10, or 100 points.
 - Optional handling of empty grades as zero; otherwise empty grades are ignored in totals and averages.
 
@@ -90,7 +91,7 @@ Notes:
 - Every parameter of `classjournal_update_lesson` except `lessonid` is optional and leaves the stored value unchanged when omitted.
 - `classjournal_get_lessons` and `classjournal_get_student_grades` return only the lessons the target user may see, so a student's total matches the Gradebook.
 
-Grades are checked against each lesson maximum and synced to Moodle Gradebook. `classjournal_get_student_grades` and `classjournal_get_final_grades` return the calculated final grade, aggregation mode, empty-grade mode, Gradebook maximum, and a human-readable aggregation description.
+Grades are checked against each lesson maximum and synced to Moodle Gradebook. `classjournal_get_student_grades` and `classjournal_get_final_grades` return the calculated final grade, aggregation mode, empty-grade mode, Gradebook maximum, display precision, and a human-readable aggregation description.
 
 ### Examples
 

@@ -75,6 +75,7 @@ class get_final_grades extends \external_api {
             'aggregation' => $journal->aggregation,
             'emptygradeszero' => (int)$journal->emptygradeszero,
             'gradebookmax' => classjournal_get_aggregate_grademax($journal),
+            'decimalpoints' => classjournal_normalise_decimalpoints($journal->decimalpoints ?? 1),
             'aggregationdescription' => classjournal_get_aggregation_description($journal),
             'grades' => $result,
         ];
@@ -91,6 +92,7 @@ class get_final_grades extends \external_api {
             'aggregation' => new \external_value(PARAM_ALPHA, 'Aggregation mode'),
             'emptygradeszero' => new \external_value(PARAM_INT, 'Whether empty grades count as zero'),
             'gradebookmax' => new \external_value(PARAM_FLOAT, 'Maximum value of the Moodle Gradebook item'),
+            'decimalpoints' => new \external_value(PARAM_INT, 'Decimal places used when displaying grades'),
             'aggregationdescription' => new \external_value(PARAM_TEXT, 'Human-readable aggregation rule'),
             'grades' => new \external_multiple_structure(new \external_single_structure([
                 'userid' => new \external_value(PARAM_INT, 'Student user id'),

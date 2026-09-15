@@ -40,6 +40,7 @@ class mod_classjournal_generator extends testing_module_generator {
             'aggregation' => 'sum',
             'emptygradeszero' => 0,
             'gradebookmax' => 100,
+            'decimalpoints' => 1,
             'showallgrades' => 0,
             'calendarevents' => 0,
         ];

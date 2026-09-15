@@ -61,6 +61,7 @@ class restore_classjournal_activity_structure_step extends restore_activity_stru
         $data = (object)$data;
         $oldid = $data->id;
         $data->course = $this->get_courseid();
+        $data->decimalpoints = isset($data->decimalpoints) ? (int)$data->decimalpoints : 1;
 
         $data->timecreated = $this->apply_date_offset($data->timecreated);
         $data->timemodified = $this->apply_date_offset($data->timemodified);

@@ -87,6 +87,7 @@ function classjournal_add_instance($data, $mform = null) {
     $data->emptygradeszero = empty($data->emptygradeszero) ? 0 : 1;
     $data->calendarevents = empty($data->calendarevents) ? 0 : 1;
     $data->gradebookmax = classjournal_normalise_gradebookmax($data->gradebookmax ?? 100);
+    $data->decimalpoints = classjournal_normalise_decimalpoints($data->decimalpoints ?? 1);
 
     $id = $DB->insert_record('classjournal', $data);
     $data->id = $id;
@@ -555,9 +556,10 @@ function classjournal_scale_item_count(int $scaleid): int {
  *
  * @param stdClass $lesson
  * @param float|null $grade
+ * @param int $decimalpoints Number of decimal places for numeric grades.
  * @return string
  */
-function classjournal_format_grade(stdClass $lesson, ?float $grade): string {
+function classjournal_format_grade(stdClass $lesson, ?float $grade, int $decimalpoints = 1): string {
     if ($grade === null) {
         return '-';
     }
@@ -566,7 +568,32 @@ function classjournal_format_grade(stdClass $lesson, ?float $grade): string {
         return $values[(int)round($grade)] ?? '-';
     }
 
-    return format_float($grade) . ' / ' . format_float($lesson->maxgrade);
+    return classjournal_format_number($grade, $decimalpoints) . ' / ' .
+        classjournal_format_number((float)$lesson->maxgrade, $decimalpoints);
+}
+
+/**
+ * Keep the configured display precision within Moodle's usual grade range.
+ *
+ * @param mixed $decimalpoints
+ * @return int
+ */
+function classjournal_normalise_decimalpoints($decimalpoints): int {
+    return max(0, min(5, (int)$decimalpoints));
+}
+
+/**
+ * Format a numeric grade using the journal's configured display precision.
+ *
+ * This affects presentation only; stored grades and calculated totals retain
+ * their full precision.
+ *
+ * @param float $number
+ * @param int $decimalpoints
+ * @return string
+ */
+function classjournal_format_number(float $number, int $decimalpoints = 1): string {
+    return format_float($number, classjournal_normalise_decimalpoints($decimalpoints));
 }
 
 /**
@@ -585,6 +612,7 @@ function classjournal_update_instance($data, $mform = null) {
     $data->emptygradeszero = empty($data->emptygradeszero) ? 0 : 1;
     $data->calendarevents = empty($data->calendarevents) ? 0 : 1;
     $data->gradebookmax = classjournal_normalise_gradebookmax($data->gradebookmax ?? 100);
+    $data->decimalpoints = classjournal_normalise_decimalpoints($data->decimalpoints ?? 1);
 
     $result = $DB->update_record('classjournal', $data);
     classjournal_grade_item_update($data);
@@ -1144,7 +1172,10 @@ function classjournal_normalise_gradebookmax($gradebookmax): float {
  * @return string
  */
 function classjournal_get_aggregation_description(stdClass $journal): string {
-    $grademax = classjournal_get_aggregate_grademax($journal);
+    $grademax = classjournal_format_number(
+        classjournal_get_aggregate_grademax($journal),
+        (int)($journal->decimalpoints ?? 1)
+    );
     if ($journal->aggregation === 'avg') {
         return empty($journal->emptygradeszero)
             ? get_string('aggregationavgdescription', 'classjournal', $grademax)

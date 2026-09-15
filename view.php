@@ -343,7 +343,13 @@ echo html_writer::div(
     'cj-toolbar mb-3'
 );
 
-$table = new \mod_classjournal\output\lessons_table('classjournal-lessons-' . $cm->id, $context, $canmanage, $baseurl);
+$table = new \mod_classjournal\output\lessons_table(
+    'classjournal-lessons-' . $cm->id,
+    $context,
+    $canmanage,
+    $baseurl,
+    (int)($journal->decimalpoints ?? 1)
+);
 $columns = [];
 $headers = [];
 if ($canmanage) {
@@ -468,10 +474,16 @@ if (!$canviewall && $journal->showallgrades && $lessons) {
             }
             $grade = $grades[$student->id][$lesson->id] ?? null;
             $gradesbylesson[$lesson->id] = $grade;
-            $row[] = classjournal_format_grade($lesson, $grade === null ? null : (float)$grade);
+            $row[] = classjournal_format_grade(
+                $lesson,
+                $grade === null ? null : (float)$grade,
+                (int)($journal->decimalpoints ?? 1)
+            );
         }
         $total = $studentlessons ? classjournal_calculate_total($journal, $studentlessons, $gradesbylesson) : null;
-        $row[] = $total === null ? '-' : format_float($total);
+        $row[] = $total === null
+            ? '-'
+            : classjournal_format_number($total, (int)($journal->decimalpoints ?? 1));
         $alltable->data[] = $row;
     }
     echo html_writer::table($alltable);
@@ -494,7 +506,9 @@ if (!$canviewall && !$journal->showallgrades && $lessons) {
         return $grade !== null;
     }));
     $percent = ($total !== null && $grademax > 0) ? max(0, min(100, round($total / $grademax * 100))) : 0;
-    $totallabel = $total === null ? '-' : format_float($total) . ' / ' . format_float($grademax);
+    $totallabel = $total === null ? '-' :
+        classjournal_format_number($total, (int)($journal->decimalpoints ?? 1)) . ' / ' .
+        classjournal_format_number($grademax, (int)($journal->decimalpoints ?? 1));
 
     $progressbar = html_writer::div(
         html_writer::div('', 'progress-bar', ['role' => 'progressbar', 'style' => 'width: ' . $percent . '%;',
@@ -544,7 +558,11 @@ if (!$canviewall && !$journal->showallgrades && $lessons) {
         if ($time = classjournal_format_lesson_time($lesson)) {
             $datecell .= ' ' . html_writer::span($time, 'text-muted small');
         }
-        $gradecell = new html_table_cell(classjournal_format_grade($lesson, $grade === null ? null : (float)$grade));
+        $gradecell = new html_table_cell(classjournal_format_grade(
+            $lesson,
+            $grade === null ? null : (float)$grade,
+            (int)($journal->decimalpoints ?? 1)
+        ));
         $gradecell->attributes['class'] = $grade === null ? '' : 'cj-graded';
         $studenttable->data[] = [
             $datecell,
@@ -556,7 +574,8 @@ if (!$canviewall && !$journal->showallgrades && $lessons) {
     $totalrow = new html_table_row([
         '',
         html_writer::tag('strong', get_string('total', 'classjournal')),
-        html_writer::tag('strong', $total === null ? '-' : format_float($total)),
+        html_writer::tag('strong', $total === null ? '-' :
+            classjournal_format_number($total, (int)($journal->decimalpoints ?? 1))),
         '',
     ]);
     $studenttable->data[] = $totalrow;

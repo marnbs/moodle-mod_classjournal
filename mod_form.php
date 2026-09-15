@@ -58,6 +58,13 @@ class mod_classjournal_mod_form extends moodleform_mod {
         $mform->addRule('gradebookmax', get_string('err_numeric', 'form'), 'numeric', null, 'client');
         $mform->addHelpButton('gradebookmax', 'gradebookmax', 'classjournal');
 
+        $mform->addElement('select', 'decimalpoints', get_string('decimalpoints', 'classjournal'), array_combine(
+            range(0, 5),
+            range(0, 5)
+        ));
+        $mform->setDefault('decimalpoints', 1);
+        $mform->addHelpButton('decimalpoints', 'decimalpoints', 'classjournal');
+
         $mform->addElement('advcheckbox', 'emptygradeszero', get_string('emptygradeszero', 'classjournal'));
         $mform->setDefault('emptygradeszero', 0);
         $mform->addHelpButton('emptygradeszero', 'emptygradeszero', 'classjournal');

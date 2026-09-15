@@ -43,6 +43,9 @@ class lessons_table extends \table_sql {
     /** @var \moodle_url Base url for edit/delete actions. */
     protected $actionbase;
 
+    /** @var int Number of decimal places used for numeric grades. */
+    protected $decimalpoints;
+
     /**
      * Constructor.
      *
@@ -50,12 +53,20 @@ class lessons_table extends \table_sql {
      * @param \context $context
      * @param bool $canmanage
      * @param \moodle_url $actionbase
+     * @param int $decimalpoints
      */
-    public function __construct(string $uniqueid, \context $context, bool $canmanage, \moodle_url $actionbase) {
+    public function __construct(
+        string $uniqueid,
+        \context $context,
+        bool $canmanage,
+        \moodle_url $actionbase,
+        int $decimalpoints = 1
+    ) {
         parent::__construct($uniqueid);
         $this->context = $context;
         $this->canmanage = $canmanage;
         $this->actionbase = $actionbase;
+        $this->decimalpoints = classjournal_normalise_decimalpoints($decimalpoints);
     }
 
     /**
@@ -123,7 +134,7 @@ class lessons_table extends \table_sql {
     public function col_maxgrade($row): string {
         return classjournal_is_scale_lesson($row)
             ? get_string('gradetypescale', 'classjournal')
-            : format_float($row->maxgrade);
+            : classjournal_format_number((float)$row->maxgrade, $this->decimalpoints);
     }
 
     /**

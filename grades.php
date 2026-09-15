@@ -58,6 +58,7 @@ $PAGE->set_context($context);
 $PAGE->requires->js(new moodle_url('/mod/classjournal/js/grid.js'));
 
 classjournal_ensure_grade_item($journal);
+$decimalpoints = classjournal_normalise_decimalpoints($journal->decimalpoints ?? 1);
 
 $perpage = in_array($perpage, [5, 10, 20, 50], true) ? $perpage : 10;
 $validviews = ['all', 'past', 'month', 'week', 'day'];
@@ -226,7 +227,7 @@ echo html_writer::tag('th', get_string('user'), ['class' => 'cj-user']);
 foreach ($lessons as $lesson) {
     $maxlabel = classjournal_is_scale_lesson($lesson)
         ? get_string('gradetypescale', 'classjournal')
-        : format_float($lesson->maxgrade);
+        : classjournal_format_number((float)$lesson->maxgrade, $decimalpoints);
     $lessonmeta = userdate($lesson->lessondate, get_string('strftimedateshort'));
     if ($lessontime = classjournal_format_lesson_time($lesson)) {
         $lessonmeta .= ', ' . $lessontime;
@@ -289,7 +290,7 @@ foreach ($students as $student) {
                 'value' => s($gradevalue),
                 'min' => '0',
                 'max' => s($lesson->maxgrade),
-                'step' => '0.01',
+                'step' => 'any',
             ]);
         }
         $commentinput = html_writer::empty_tag('input', [

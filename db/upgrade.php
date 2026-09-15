@@ -179,5 +179,25 @@ function xmldb_classjournal_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026072700, 'classjournal');
     }
 
+    if ($oldversion < 2026091500) {
+        $dbman = $DB->get_manager();
+        $journal = new xmldb_table('classjournal');
+        $decimalpoints = new xmldb_field(
+            'decimalpoints',
+            XMLDB_TYPE_INTEGER,
+            '1',
+            null,
+            XMLDB_NOTNULL,
+            null,
+            '1',
+            'gradebookmax'
+        );
+        if (!$dbman->field_exists($journal, $decimalpoints)) {
+            $dbman->add_field($journal, $decimalpoints);
+        }
+
+        upgrade_mod_savepoint(true, 2026091500, 'classjournal');
+    }
+
     return true;
 }

@@ -35,13 +35,20 @@ final class lib_test extends \advanced_testcase {
      * @param string $aggregation
      * @param float $gradebookmax
      * @param int $emptygradeszero
+     * @param int $decimalpoints
      * @return \stdClass
      */
-    protected function journal(string $aggregation = 'sum', float $gradebookmax = 100, int $emptygradeszero = 0): \stdClass {
+    protected function journal(
+        string $aggregation = 'sum',
+        float $gradebookmax = 100,
+        int $emptygradeszero = 0,
+        int $decimalpoints = 1
+    ): \stdClass {
         return (object)[
             'aggregation' => $aggregation,
             'gradebookmax' => $gradebookmax,
             'emptygradeszero' => $emptygradeszero,
+            'decimalpoints' => $decimalpoints,
         ];
     }
 
@@ -96,7 +103,20 @@ final class lib_test extends \advanced_testcase {
 
         // The journal default is 100, but it is deliberately absent here: formatting
         // a lesson grade must only depend on that lesson's own maximum.
-        $this->assertSame('20 / 25', classjournal_format_grade($lesson, 20.0));
+        $this->assertSame('20.0 / 25.0', classjournal_format_grade($lesson, 20.0));
+        $this->assertSame('20.00 / 25.00', classjournal_format_grade($lesson, 20.0, 2));
+        $this->assertSame('20.0 / 25.0', classjournal_format_grade($lesson, 19.96, 1));
+    }
+
+    /**
+     * Decimal-point settings are constrained to the supported range.
+     *
+     * @covers ::classjournal_normalise_decimalpoints
+     */
+    public function test_normalise_decimalpoints(): void {
+        $this->assertSame(0, classjournal_normalise_decimalpoints(-1));
+        $this->assertSame(2, classjournal_normalise_decimalpoints(2));
+        $this->assertSame(5, classjournal_normalise_decimalpoints(9));
     }
 
     /**
@@ -163,11 +183,11 @@ final class lib_test extends \advanced_testcase {
         $sum = classjournal_get_aggregation_description($this->journal('sum', 100, 0));
         $avg = classjournal_get_aggregation_description($this->journal('avg', 100, 0));
         $this->assertStringContainsString(
-            get_string('aggregationsumdescription', 'classjournal', 100.0),
+            get_string('aggregationsumdescription', 'classjournal', '100.0'),
             $sum
         );
         $this->assertStringContainsString(
-            get_string('aggregationavgdescription', 'classjournal', 100.0),
+            get_string('aggregationavgdescription', 'classjournal', '100.0'),
             $avg
         );
     }
@@ -186,12 +206,14 @@ final class lib_test extends \advanced_testcase {
             'course' => $course->id,
             'aggregation' => 'avg',
             'gradebookmax' => 0,
+            'decimalpoints' => 3,
         ]);
 
         $record = $DB->get_record('classjournal', ['id' => $journal->id], '*', MUST_EXIST);
         $this->assertSame('avg', $record->aggregation);
         // Zero is normalised to the 100 default.
         $this->assertEqualsWithDelta(100.0, (float)$record->gradebookmax, 0.0001);
+        $this->assertSame(3, (int)$record->decimalpoints);
 
         $gradeitem = \grade_item::fetch([
             'itemtype' => 'mod',
@@ -218,12 +240,14 @@ final class lib_test extends \advanced_testcase {
         $data->aggregation = 'avg';
         $data->gradebookmax = 50;
         $data->emptygradeszero = 1;
+        $data->decimalpoints = 2;
         $this->assertTrue(classjournal_update_instance($data));
 
         $updated = $DB->get_record('classjournal', ['id' => $journal->id], '*', MUST_EXIST);
         $this->assertSame('avg', $updated->aggregation);
         $this->assertEqualsWithDelta(50.0, (float)$updated->gradebookmax, 0.0001);
         $this->assertEquals(1, $updated->emptygradeszero);
+        $this->assertSame(2, (int)$updated->decimalpoints);
     }
 
     /**

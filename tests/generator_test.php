@@ -44,6 +44,7 @@ final class generator_test extends \advanced_testcase {
         // Defaults applied by the generator.
         $record = $DB->get_record('classjournal', ['id' => $journal->id], '*', MUST_EXIST);
         $this->assertSame('sum', $record->aggregation);
+        $this->assertSame(1, (int)$record->decimalpoints);
 
         $lesson = $generator->create_lesson($journal, ['name' => 'Algebra', 'maxgrade' => 20]);
         $this->assertEquals(1, $DB->count_records('classjournal_lessons', ['journalid' => $journal->id]));
