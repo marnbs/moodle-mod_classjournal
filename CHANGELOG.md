@@ -1,5 +1,11 @@
 # Changelog
 
+#### v1.2.1 2026-09-16
+- Added a per-journal setting for displaying numeric grades, maximum grades,
+  and totals with 0–5 decimal places. The default is one decimal place.
+- Display rounding does not change the precision of stored grades or calculated
+  totals. The setting is included in backup/restore and exposed by the grade APIs.
+
 
 #### v1.2.0 2026-07-27
 - Group aware lessons: a lesson can be restricted to one course group instead
