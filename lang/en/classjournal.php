@@ -116,6 +116,7 @@ $string['nogrades'] = 'No grades yet.';
 $string['nolessons'] = 'No lessons yet.';
 $string['pluginadministration'] = 'Class journal administration';
 $string['pluginname'] = 'Class journal';
+$string['privacy:export:lessonpath'] = '{$a->name} (#{$a->id})';
 $string['privacy:metadata:classjournal_grades'] = 'Stores grades and comments for class journal lessons.';
 $string['privacy:metadata:classjournal_grades:comment'] = 'The optional teacher comment.';
 $string['privacy:metadata:classjournal_grades:grade'] = 'The lesson grade.';

@@ -423,6 +423,49 @@ function classjournal_filter_students_by_group(
 }
 
 /**
+ * Whether a user may access one student's grades.
+ *
+ * The target must be an enrolled student rather than another teacher or manager.
+ * In separate groups mode a user without moodle/site:accessallgroups may only
+ * access students who share at least one course group with them.
+ *
+ * @param stdClass|cm_info $cm
+ * @param context_module $context
+ * @param int $studentid target student id
+ * @param int $userid user whose access is checked, defaults to the current user
+ * @return bool
+ */
+function classjournal_can_access_student(
+    $cm,
+    context_module $context,
+    int $studentid,
+    int $userid = 0
+): bool {
+    global $USER;
+
+    if (!classjournal_is_student_user($context, $studentid)) {
+        return false;
+    }
+
+    $userid = $userid ?: (int)$USER->id;
+    if ($userid === $studentid) {
+        return true;
+    }
+
+    $seesallgroups = groups_get_activity_groupmode($cm) != SEPARATEGROUPS ||
+        has_capability('moodle/site:accessallgroups', $context, $userid);
+    if ($seesallgroups) {
+        return true;
+    }
+
+    $groupmap = classjournal_get_course_group_map((int)$cm->course);
+    $usergroups = $groupmap[$userid] ?? [];
+    $studentgroups = $groupmap[$studentid] ?? [];
+
+    return (bool)array_intersect_key($usergroups, $studentgroups);
+}
+
+/**
  * Whether a user may see and manage one particular lesson.
  *
  * @param stdClass|cm_info $cm

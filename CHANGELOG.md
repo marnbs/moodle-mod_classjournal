@@ -1,5 +1,10 @@
 # Changelog
 
+#### Unreleased
+
+- Enforced separate-group student visibility consistently in AJAX and REST grade endpoints.
+- Added Privacy API export for lesson grades, comments, dates, and modification times.
+
 #### v1.2.1 2026-09-16
 - Added a per-journal setting for displaying numeric grades, maximum grades,
   and totals with 0–5 decimal places. The default is one decimal place.

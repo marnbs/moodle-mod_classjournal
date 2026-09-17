@@ -61,9 +61,21 @@ class get_final_grades extends \external_api {
 
         require_once($CFG->dirroot . '/mod/classjournal/lib.php');
 
+        $students = classjournal_get_student_users($context, 'u.id');
+        $students = classjournal_filter_students_by_group(
+            $cm,
+            $context,
+            $students,
+            classjournal_get_course_group_map((int)$journal->course)
+        );
+        $visiblestudentids = array_fill_keys(array_map('intval', array_keys($students)), true);
+
         $grades = classjournal_get_aggregate_grades($journal);
         $result = [];
         foreach ($grades as $grade) {
+            if (!isset($visiblestudentids[(int)$grade->userid])) {
+                continue;
+            }
             $result[] = [
                 'userid' => (int)$grade->userid,
                 'finalgrade' => $grade->rawgrade === null ? null : (float)$grade->rawgrade,

@@ -27,6 +27,8 @@ namespace mod_classjournal\privacy;
 use core_privacy\local\metadata\collection;
 use core_privacy\local\request\contextlist;
 use core_privacy\local\request\plugin\provider as plugin_provider;
+use core_privacy\local\request\transform;
+use core_privacy\local\request\writer;
 
 /**
  * Privacy API implementation for mod_classjournal.
@@ -83,6 +85,56 @@ class provider implements
      * @param \core_privacy\local\request\approved_contextlist $contextlist
      */
     public static function export_user_data(\core_privacy\local\request\approved_contextlist $contextlist) {
+        global $DB;
+
+        if ($contextlist->get_component() !== 'mod_classjournal') {
+            return;
+        }
+
+        $userid = (int)$contextlist->get_user()->id;
+        foreach ($contextlist->get_contexts() as $context) {
+            if ($context->contextlevel !== CONTEXT_MODULE) {
+                continue;
+            }
+
+            $cm = get_coursemodule_from_id('classjournal', $context->instanceid);
+            if (!$cm) {
+                continue;
+            }
+
+            $sql = "SELECT g.id, g.grade, g.comment, g.timemodified,
+                           l.id AS lessonid, l.name AS lessonname,
+                           l.lessondate, l.maxgrade
+                      FROM {classjournal_lessons} l
+                      JOIN {classjournal_grades} g ON g.lessonid = l.id
+                     WHERE l.journalid = :journalid
+                           AND g.userid = :userid
+                  ORDER BY l.lessondate ASC, l.id ASC";
+            $records = $DB->get_records_sql($sql, [
+                'journalid' => $cm->instance,
+                'userid' => $userid,
+            ]);
+
+            foreach ($records as $record) {
+                $lessonname = format_string($record->lessonname, true, ['context' => $context]);
+                $lessonpath = get_string('privacy:export:lessonpath', 'classjournal', (object)[
+                    'name' => $lessonname,
+                    'id' => (int)$record->lessonid,
+                ]);
+                $data = (object)[
+                    'lesson' => $lessonname,
+                    'lessondate' => transform::datetime((int)$record->lessondate),
+                    'grade' => $record->grade === null ? null : (float)$record->grade,
+                    'maxgrade' => (float)$record->maxgrade,
+                    'comment' => (string)($record->comment ?? ''),
+                    'timemodified' => transform::datetime((int)$record->timemodified),
+                ];
+                writer::with_context($context)->export_data(
+                    [get_string('grades', 'classjournal'), $lessonpath],
+                    $data
+                );
+            }
+        }
     }
 
     /**

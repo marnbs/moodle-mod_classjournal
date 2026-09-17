@@ -72,11 +72,16 @@ class set_grade extends \external_api {
         self::validate_context($context);
         require_capability('mod/classjournal:grade', $context);
 
-        if (!is_enrolled($context, $params['userid'], 'mod/classjournal:view')) {
+        require_once($CFG->dirroot . '/mod/classjournal/lib.php');
+
+        if (!classjournal_is_student_user($context, $params['userid'])) {
             throw new \moodle_exception('notenrolled', 'moodle');
         }
 
-        require_once($CFG->dirroot . '/mod/classjournal/lib.php');
+        // In separate groups mode a grader may only grade students in their own groups.
+        if (!classjournal_can_access_student($cm, $context, $params['userid'])) {
+            throw new \required_capability_exception($context, 'moodle/site:accessallgroups', 'nopermissions', '');
+        }
 
         // In separate groups mode a lesson of another group is out of reach.
         if (!classjournal_can_access_lesson($cm, $context, $lesson)) {

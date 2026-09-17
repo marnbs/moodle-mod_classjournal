@@ -47,6 +47,9 @@ $lesson = $DB->get_record('classjournal_lessons', ['id' => $lessonid, 'journalid
 if (!classjournal_is_student_user($context, $userid)) {
     throw new moodle_exception('notenrolled', 'moodle');
 }
+if (!classjournal_can_access_student($cm, $context, $userid)) {
+    throw new required_capability_exception($context, 'moodle/site:accessallgroups', 'nopermissions', '');
+}
 
 // A lesson restricted to a group is only gradeable by, and for, that group.
 if (!classjournal_can_access_lesson($cm, $context, $lesson)) {

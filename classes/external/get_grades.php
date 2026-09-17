@@ -67,9 +67,21 @@ class get_grades extends \external_api {
             throw new \required_capability_exception($context, 'moodle/site:accessallgroups', 'nopermissions', '');
         }
 
+        $students = classjournal_get_student_users($context, 'u.id');
+        $students = classjournal_filter_students_by_group(
+            $cm,
+            $context,
+            $students,
+            classjournal_get_course_group_map((int)$journal->course)
+        );
+        $visiblestudentids = array_fill_keys(array_map('intval', array_keys($students)), true);
+
         $records = $DB->get_records('classjournal_grades', ['lessonid' => $lesson->id], 'userid ASC');
         $result = [];
         foreach ($records as $record) {
+            if (!isset($visiblestudentids[(int)$record->userid])) {
+                continue;
+            }
             $result[] = [
                 'userid' => (int)$record->userid,
                 'grade' => $record->grade === null ? null : (float)$record->grade,

@@ -68,6 +68,13 @@ class get_student_grades extends \external_api {
 
         require_once($CFG->dirroot . '/mod/classjournal/lib.php');
 
+        if (!classjournal_is_student_user($context, $targetuserid)) {
+            throw new \moodle_exception('notenrolled', 'moodle');
+        }
+        if (!classjournal_can_access_student($cm, $context, $targetuserid)) {
+            throw new \required_capability_exception($context, 'moodle/site:accessallgroups', 'nopermissions', '');
+        }
+
         $lessons = $DB->get_records('classjournal_lessons', ['journalid' => $journal->id], 'lessondate ASC, id ASC');
         // Only lessons that apply to this student's groups are reported, so the
         // total matches what the Gradebook holds.

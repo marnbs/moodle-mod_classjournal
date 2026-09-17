@@ -19,6 +19,7 @@ namespace mod_classjournal\privacy;
 use core_privacy\local\request\approved_contextlist;
 use core_privacy\local\request\approved_userlist;
 use core_privacy\local\request\userlist;
+use core_privacy\local\request\writer;
 
 defined('MOODLE_INTERNAL') || die();
 
@@ -105,6 +106,31 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
         $this->assertCount(2, $userids);
         $this->assertContains((int)$this->student1->id, $userids);
         $this->assertContains((int)$this->student2->id, $userids);
+    }
+
+    /**
+     * Grades and comments are included in a user's privacy export.
+     */
+    public function test_export_user_data(): void {
+        $contextlist = new approved_contextlist($this->student1, 'mod_classjournal', [$this->context->id]);
+        provider::export_user_data($contextlist);
+
+        $lessonpath = get_string('privacy:export:lessonpath', 'classjournal', (object)[
+            'name' => format_string($this->lesson->name),
+            'id' => (int)$this->lesson->id,
+        ]);
+        $data = writer::with_context($this->context)->get_data([
+            get_string('grades', 'classjournal'),
+            $lessonpath,
+        ]);
+
+        $this->assertNotEmpty($data);
+        $this->assertSame($this->lesson->name, $data->lesson);
+        $this->assertEqualsWithDelta(8.0, (float)$data->grade, 0.00001);
+        $this->assertEqualsWithDelta(10.0, (float)$data->maxgrade, 0.00001);
+        $this->assertSame('well done', $data->comment);
+        $this->assertNotEmpty($data->lessondate);
+        $this->assertNotEmpty($data->timemodified);
     }
 
     /**
