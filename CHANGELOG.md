@@ -4,6 +4,7 @@
 
 - Enforced separate-group student visibility consistently in AJAX and REST grade endpoints.
 - Added Privacy API export for lesson grades, comments, dates, and modification times.
+- Extended CI coverage to the minimum Moodle 4.1 and latest Moodle 5.2 branches.
 
 #### v1.2.1 2026-09-16
 - Added a per-journal setting for displaying numeric grades, maximum grades,
