@@ -11,7 +11,7 @@ not patched — please upgrade before reporting an issue against them.
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 1.0.x   | :white_check_mark: |
+| 1.x.x   | :white_check_mark: |
 | < 1.0   | :x:                |
 
 Because this is a Moodle activity module, "supported" also assumes a supported
