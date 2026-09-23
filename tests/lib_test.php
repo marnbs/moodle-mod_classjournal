@@ -120,6 +120,39 @@ final class lib_test extends \advanced_testcase {
     }
 
     /**
+     * Submitted grades are parsed without silently changing their meaning.
+     *
+     * @covers ::classjournal_parse_grade
+     */
+    public function test_parse_grade(): void {
+        $this->assertNull(classjournal_parse_grade(null));
+        $this->assertNull(classjournal_parse_grade(''));
+        $this->assertNull(classjournal_parse_grade('   '));
+        $this->assertSame(8.5, classjournal_parse_grade('8.5'));
+        $this->assertSame(-2.0, classjournal_parse_grade(-2));
+    }
+
+    /**
+     * Non-numeric submitted grades are rejected.
+     *
+     * @covers ::classjournal_parse_grade
+     */
+    public function test_parse_grade_rejects_non_numeric_value(): void {
+        $this->expectException(\moodle_exception::class);
+        classjournal_parse_grade('not-a-grade');
+    }
+
+    /**
+     * Non-finite submitted grades are rejected.
+     *
+     * @covers ::classjournal_parse_grade
+     */
+    public function test_parse_grade_rejects_non_finite_value(): void {
+        $this->expectException(\moodle_exception::class);
+        classjournal_parse_grade(INF);
+    }
+
+    /**
      * Sum aggregation adds raw lesson points.
      *
      * @covers ::classjournal_calculate_total
@@ -267,10 +300,19 @@ final class lib_test extends \advanced_testcase {
         $lesson = $generator->create_lesson($journal, ['maxgrade' => 10]);
         classjournal_set_lesson_grade($lesson, $student->id, 7.0);
 
+        $gradeitemparams = [
+            'itemtype' => 'mod',
+            'itemmodule' => 'classjournal',
+            'iteminstance' => $journal->id,
+            'itemnumber' => 0,
+        ];
+        $this->assertTrue($DB->record_exists('grade_items', $gradeitemparams));
+
         $this->assertTrue(classjournal_delete_instance($journal->id));
         $this->assertFalse($DB->record_exists('classjournal', ['id' => $journal->id]));
         $this->assertFalse($DB->record_exists('classjournal_lessons', ['journalid' => $journal->id]));
         $this->assertFalse($DB->record_exists('classjournal_grades', ['lessonid' => $lesson->id]));
+        $this->assertFalse($DB->record_exists('grade_items', $gradeitemparams));
     }
 
     /**
@@ -436,6 +478,37 @@ final class lib_test extends \advanced_testcase {
             $this->fail('Expected a moodle_exception for an out-of-range grade.');
         } catch (\moodle_exception $e) {
             // Nothing should have been written.
+            $this->assertEquals(0, $DB->count_records('classjournal_grades'));
+        }
+    }
+
+    /**
+     * Bulk saving rejects malformed grades instead of converting them to zero.
+     *
+     * @covers ::classjournal_set_lesson_grades
+     * @covers ::classjournal_parse_grade
+     */
+    public function test_set_lesson_grades_bulk_rejects_malformed_grade(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_classjournal');
+        $journal = $this->getDataGenerator()->create_module('classjournal', ['course' => $course->id]);
+        $student = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $lesson = $generator->create_lesson($journal, ['maxgrade' => 10]);
+
+        try {
+            classjournal_set_lesson_grades($journal, [$lesson], [
+                (object)[
+                    'lessonid' => $lesson->id,
+                    'userid' => $student->id,
+                    'grade' => 'not-a-grade',
+                    'comment' => '',
+                ],
+            ]);
+            $this->fail('Expected a moodle_exception for a malformed grade.');
+        } catch (\moodle_exception $e) {
             $this->assertEquals(0, $DB->count_records('classjournal_grades'));
         }
     }

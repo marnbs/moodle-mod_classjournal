@@ -125,8 +125,10 @@ if (data_submitted() && confirm_sesskey()) {
                 continue;
             }
             $rawgrade = $submittedgrades[$student->id][$lesson->id] ?? '';
-            $rawgrade = is_array($rawgrade) ? '' : clean_param($rawgrade, PARAM_RAW_TRIMMED);
-            $grade = $rawgrade === '' ? null : (float)$rawgrade;
+            if (!is_array($rawgrade)) {
+                $rawgrade = clean_param($rawgrade, PARAM_RAW_TRIMMED);
+            }
+            $grade = classjournal_parse_grade($rawgrade);
 
             $rawcomment = $submittedcomments[$student->id][$lesson->id] ?? '';
             $rawcomment = is_array($rawcomment) ? '' : $rawcomment;

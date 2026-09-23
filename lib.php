@@ -640,6 +640,35 @@ function classjournal_format_number(float $number, int $decimalpoints = 1): stri
 }
 
 /**
+ * Convert a submitted grade to a finite float or null for an empty value.
+ *
+ * @param mixed $value submitted grade
+ * @return float|null
+ * @throws moodle_exception when the value is not a finite number
+ */
+function classjournal_parse_grade($value): ?float {
+    if ($value === null) {
+        return null;
+    }
+    if (is_string($value)) {
+        $value = trim($value);
+        if ($value === '') {
+            return null;
+        }
+    }
+    if (!is_int($value) && !is_float($value) && !(is_string($value) && is_numeric($value))) {
+        throw new moodle_exception('invalidgradenumber', 'classjournal');
+    }
+
+    $grade = (float)$value;
+    if (!is_finite($grade)) {
+        throw new moodle_exception('invalidgradenumber', 'classjournal');
+    }
+
+    return $grade;
+}
+
+/**
  * Update a class journal instance.
  *
  * @param stdClass $data
@@ -693,6 +722,8 @@ function classjournal_delete_instance($id) {
         $DB->delete_records_select('classjournal_grades', "lessonid $insql", $params);
     }
 
+    classjournal_grade_item_delete($journal);
+
     return $DB->delete_records('classjournal', ['id' => $journal->id]);
 }
 
@@ -708,7 +739,7 @@ function classjournal_delete_instance($id) {
 function classjournal_set_lesson_grade(stdClass $lesson, int $userid, ?float $grade, string $comment = ''): int {
     global $DB;
 
-    if ($grade !== null && ($grade < 0 || $grade > (float)$lesson->maxgrade)) {
+    if ($grade !== null && (!is_finite($grade) || $grade < 0 || $grade > (float)$lesson->maxgrade)) {
         throw new moodle_exception('invalidgrade', 'classjournal', '', format_float($lesson->maxgrade));
     }
 
@@ -771,6 +802,7 @@ function classjournal_set_lesson_grades(stdClass $journal, array $lessons, array
 
     // Validate every grade before touching the database so the save is all-or-nothing.
     foreach ($changes as $change) {
+        $change->grade = classjournal_parse_grade($change->grade);
         if ($change->grade === null || !isset($lessonmax[(int)$change->lessonid])) {
             continue;
         }
@@ -858,7 +890,7 @@ function classjournal_delete_lesson(stdClass $lesson, bool $deletegrades = true)
     global $DB;
 
     $journal = $DB->get_record('classjournal', ['id' => $lesson->journalid], '*', MUST_EXIST);
-    classjournal_grade_item_delete($journal, $lesson);
+    classjournal_legacy_grade_item_delete($journal, $lesson);
     $affecteduserids = $DB->get_fieldset_select(
         'classjournal_grades',
         'DISTINCT userid',
@@ -1064,13 +1096,35 @@ function classjournal_get_itemname_mapping_for_component(): array {
 }
 
 /**
+ * Delete the aggregate grade item from the gradebook.
+ *
+ * @param stdClass $journal
+ * @return int
+ */
+function classjournal_grade_item_delete(stdClass $journal): int {
+    global $CFG;
+    require_once($CFG->libdir . '/gradelib.php');
+
+    return grade_update(
+        'mod/classjournal',
+        $journal->course,
+        'mod',
+        'classjournal',
+        $journal->id,
+        0,
+        null,
+        ['deleted' => 1]
+    );
+}
+
+/**
  * Delete a legacy lesson grade item from the gradebook.
  *
  * @param stdClass $journal
  * @param stdClass $lesson
  * @return int
  */
-function classjournal_grade_item_delete(stdClass $journal, stdClass $lesson): int {
+function classjournal_legacy_grade_item_delete(stdClass $journal, stdClass $lesson): int {
     global $CFG;
     require_once($CFG->libdir . '/gradelib.php');
 
@@ -1097,7 +1151,7 @@ function classjournal_delete_legacy_lesson_grade_items(stdClass $journal): void 
 
     $lessons = $DB->get_records('classjournal_lessons', ['journalid' => $journal->id], '', 'id, journalid');
     foreach ($lessons as $lesson) {
-        classjournal_grade_item_delete($journal, $lesson);
+        classjournal_legacy_grade_item_delete($journal, $lesson);
     }
 }
 

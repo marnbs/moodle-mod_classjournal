@@ -59,7 +59,7 @@ if (!empty($lesson->groupid) && !groups_is_member((int)$lesson->groupid, $userid
     throw new moodle_exception('usernotinlessongroup', 'classjournal');
 }
 
-$grade = ($graderaw === '') ? null : (float)$graderaw;
+$grade = classjournal_parse_grade($graderaw);
 
 classjournal_set_lesson_grades($journal, [$lesson], [
     (object)[

@@ -80,6 +80,7 @@ $string['importcsv'] = 'Import from file';
 $string['importdone'] = 'Grades updated: {$a->written}, rows skipped: {$a->skipped}.';
 $string['importhelp'] = 'Upload an Excel (.xlsx) or CSV file exported from this page. Keep the "userid" column and the lesson headers (each ends with [#id]). A value sets the grade; an empty cell means no grade. Comments are not changed.';
 $string['invalidgrade'] = 'Grade must be between 0 and {$a}.';
+$string['invalidgradenumber'] = 'Grade must be a finite number or empty.';
 $string['invalidlessongroup'] = 'You cannot assign a lesson to this group.';
 $string['invalidlessontime'] = 'The end time must be after the start time.';
 $string['lesson'] = 'Lesson';
