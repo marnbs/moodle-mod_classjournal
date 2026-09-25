@@ -86,6 +86,7 @@ function classjournal_add_instance($data, $mform = null) {
     $data->showallgrades = empty($data->showallgrades) ? 0 : 1;
     $data->emptygradeszero = empty($data->emptygradeszero) ? 0 : 1;
     $data->calendarevents = empty($data->calendarevents) ? 0 : 1;
+    $data->aggregation = classjournal_normalise_aggregation($data->aggregation ?? 'sum');
     $data->gradebookmax = classjournal_normalise_gradebookmax($data->gradebookmax ?? 100);
     $data->decimalpoints = classjournal_normalise_decimalpoints($data->decimalpoints ?? 1);
 
@@ -135,6 +136,7 @@ function classjournal_create_lesson(
     if ($maxgrade <= 0) {
         throw new moodle_exception('invalidgrade', 'classjournal', '', format_float($maxgrade));
     }
+    classjournal_validate_lesson_times($starttime, $endtime);
 
     $now = time();
     $lesson = (object)[
@@ -196,6 +198,7 @@ function classjournal_update_lesson(
     if ($maxgrade <= 0) {
         throw new moodle_exception('invalidgrade', 'classjournal', '', format_float($maxgrade));
     }
+    classjournal_validate_lesson_times($starttime, $endtime);
 
     $existing->name = $name;
     $existing->description = $description;
@@ -213,6 +216,24 @@ function classjournal_update_lesson(
     classjournal_sync_lesson_event($journal, $existing);
 
     return $existing;
+}
+
+/**
+ * Validate an optional lesson time interval.
+ *
+ * @param int|null $starttime Start time as seconds from midnight.
+ * @param int|null $endtime End time as seconds from midnight.
+ * @return void
+ */
+function classjournal_validate_lesson_times(?int $starttime, ?int $endtime): void {
+    $notime = $starttime === null && $endtime === null;
+    $validrange = $starttime !== null && $endtime !== null
+        && $starttime >= 0 && $starttime <= 86399
+        && $endtime >= 0 && $endtime <= 86399;
+
+    if (!$notime && (!$validrange || $endtime <= $starttime)) {
+        throw new moodle_exception('invalidlessontime', 'classjournal');
+    }
 }
 
 /**
@@ -683,6 +704,7 @@ function classjournal_update_instance($data, $mform = null) {
     $data->showallgrades = empty($data->showallgrades) ? 0 : 1;
     $data->emptygradeszero = empty($data->emptygradeszero) ? 0 : 1;
     $data->calendarevents = empty($data->calendarevents) ? 0 : 1;
+    $data->aggregation = classjournal_normalise_aggregation($data->aggregation ?? 'sum');
     $data->gradebookmax = classjournal_normalise_gradebookmax($data->gradebookmax ?? 100);
     $data->decimalpoints = classjournal_normalise_decimalpoints($data->decimalpoints ?? 1);
 
@@ -986,12 +1008,29 @@ function classjournal_get_grade_item_name(stdClass $journal): string {
 }
 
 /**
- * Static maximum grade for the aggregate Gradebook item.
+ * Maximum grade for the aggregate Gradebook item.
+ *
+ * Raw-sum journals use the sum of lesson maximums. Other modes use the
+ * configured fixed maximum.
  *
  * @param stdClass $journal
  * @return float
  */
 function classjournal_get_aggregate_grademax(stdClass $journal): float {
+    global $DB;
+
+    if (classjournal_normalise_aggregation($journal->aggregation ?? 'sum') === 'rawsum' && !empty($journal->id)) {
+        $lessonmax = $DB->get_field_sql(
+            'SELECT SUM(maxgrade)
+               FROM {classjournal_lessons}
+              WHERE journalid = :journalid',
+            ['journalid' => $journal->id]
+        );
+        if ($lessonmax !== false && (float)$lessonmax > 0) {
+            return (float)$lessonmax;
+        }
+    }
+
     return classjournal_normalise_gradebookmax($journal->gradebookmax ?? 100);
 }
 
@@ -1214,6 +1253,7 @@ function classjournal_is_student_user(context_module $context, int $userid): boo
  */
 function classjournal_calculate_total(stdClass $journal, array $lessons, array $gradesbylesson): ?float {
     $values = [];
+    $maximums = [];
     $percentages = [];
     $hasgrade = false;
 
@@ -1228,7 +1268,9 @@ function classjournal_calculate_total(stdClass $journal, array $lessons, array $
         }
 
         $values[] = $grade;
-        $percentages[] = (float)$lesson->maxgrade > 0 ? $grade / (float)$lesson->maxgrade : 0.0;
+        $lessonmax = (float)$lesson->maxgrade;
+        $maximums[] = $lessonmax;
+        $percentages[] = $lessonmax > 0 ? $grade / $lessonmax : 0.0;
     }
 
     if (!$hasgrade && empty($journal->emptygradeszero)) {
@@ -1239,12 +1281,32 @@ function classjournal_calculate_total(stdClass $journal, array $lessons, array $
         return empty($journal->emptygradeszero) ? null : 0.0;
     }
 
+    $aggregation = classjournal_normalise_aggregation($journal->aggregation ?? 'sum');
+    if ($aggregation === 'rawsum') {
+        return array_sum($values);
+    }
+
     $grademax = classjournal_get_aggregate_grademax($journal);
-    if ($journal->aggregation === 'avg') {
+    if ($aggregation === 'avg') {
         return (array_sum($percentages) / count($percentages)) * $grademax;
+    }
+    if ($aggregation === 'normsum') {
+        $maximum = array_sum($maximums);
+        return $maximum > 0 ? (array_sum($values) / $maximum) * $grademax : 0.0;
     }
 
     return min(array_sum($values), $grademax);
+}
+
+/**
+ * Return a supported aggregation mode, falling back to the legacy sum.
+ *
+ * @param mixed $aggregation
+ * @return string
+ */
+function classjournal_normalise_aggregation($aggregation): string {
+    $aggregation = (string)$aggregation;
+    return in_array($aggregation, ['sum', 'rawsum', 'normsum', 'avg'], true) ? $aggregation : 'sum';
 }
 
 /**
@@ -1273,10 +1335,21 @@ function classjournal_get_aggregation_description(stdClass $journal): string {
         classjournal_get_aggregate_grademax($journal),
         (int)($journal->decimalpoints ?? 1)
     );
-    if ($journal->aggregation === 'avg') {
+    $aggregation = classjournal_normalise_aggregation($journal->aggregation ?? 'sum');
+    if ($aggregation === 'avg') {
         return empty($journal->emptygradeszero)
             ? get_string('aggregationavgdescription', 'classjournal', $grademax)
             : get_string('aggregationavgzerodescription', 'classjournal', $grademax);
+    }
+    if ($aggregation === 'rawsum') {
+        return empty($journal->emptygradeszero)
+            ? get_string('aggregationrawsumdescription', 'classjournal', $grademax)
+            : get_string('aggregationrawsumzerodescription', 'classjournal', $grademax);
+    }
+    if ($aggregation === 'normsum') {
+        return empty($journal->emptygradeszero)
+            ? get_string('aggregationnormsumdescription', 'classjournal', $grademax)
+            : get_string('aggregationnormsumzerodescription', 'classjournal', $grademax);
     }
 
     return empty($journal->emptygradeszero)

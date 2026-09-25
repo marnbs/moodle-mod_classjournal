@@ -1,6 +1,6 @@
 # Class journal (`mod_classjournal`)
 
-Class journal is a Moodle activity module for lesson-based grading. Teachers add the activity to a course, create lessons, and enter per-student grades for each lesson. Moodle Gradebook shows one aggregate grade item per journal, calculated as a sum or average depending on activity settings, and the plugin exposes Moodle External Functions for REST integrations.
+Class journal is a Moodle activity module for lesson-based grading. Teachers add the activity to a course, create lessons, and enter per-student grades for each lesson. Moodle Gradebook shows one aggregate grade item per journal, calculated using the selected aggregation mode, and the plugin exposes Moodle External Functions for REST integrations.
 
 [![Moodle Plugin](https://img.shields.io/badge/Moodle-plugin-orange.svg)](https://moodle.org/plugins/mod_classjournal) [![PHP 8.1+](https://img.shields.io/badge/PHP-8.1%2B-777bb4.svg)](https://www.php.net/) [![License GPL v3+](https://img.shields.io/badge/license-GPLv3%2B-blue.svg)](LICENSE) [![Latest release](https://img.shields.io/github/v/release/marnbs/moodle-mod_classjournal)](https://github.com/marnbs/moodle-mod_classjournal/releases) [![Issues](https://img.shields.io/github/issues/marnbs/moodle-mod_classjournal)](https://github.com/marnbs/moodle-mod_classjournal/issues)
 
@@ -27,9 +27,9 @@ Class journal is a Moodle activity module for lesson-based grading. Teachers add
 - Grade each lesson on points or on a Moodle scale, with optional per-grade comments.
 - Grade grid with colour indication, AJAX autosave, and a per-column fill button.
 - Export the grid to Excel and re-import it to update grades in bulk.
-- Gradebook sync: one Moodle grade item per journal with sum/average aggregation.
+- Gradebook sync: one Moodle grade item per journal with capped sum, raw sum, normalised sum, or average-percentage aggregation.
 - Configurable display precision from 0 to 5 decimal places (one by default).
-- Configurable final Gradebook maximum, for example fixed 100-point output while lessons use 5, 10, or 100 points.
+- Configurable final Gradebook maximum for capped, normalised, and average modes; raw sum derives it from the lessons.
 - Optional handling of empty grades as zero; otherwise empty grades are ignored in totals and averages.
 
 ### Visibility
@@ -78,20 +78,22 @@ Registered functions, with the capability each one requires:
 | `classjournal_get_grades` | `lessonid` | `viewallgrades` |
 | `classjournal_get_final_grades` | `cmid` | `viewallgrades` |
 | `classjournal_get_student_grades` | `cmid`, `userid` | `view` |
-| `classjournal_create_lesson` | `cmid`, `name`, `description`, `lessondate`, `maxgrade`, `starttime`, `endtime`, `clientrequestid`, `groupid` | `manage` |
-| `classjournal_update_lesson` | `lessonid`, plus any of `name`, `description`, `lessondate`, `maxgrade`, `starttime`, `endtime`, `groupid` | `manage` |
+| `classjournal_create_lesson` | `cmid`, `name`, `description`, `lessondate`, `maxgrade`, `starttime`, `endtime`, `clientrequestid`, `groupid`, `hastime` | `manage` |
+| `classjournal_update_lesson` | `lessonid`, plus any of `name`, `description`, `lessondate`, `maxgrade`, `starttime`, `endtime`, `groupid`, `hastime` | `manage` |
 | `classjournal_delete_lesson` | `lessonid` | `manage` |
 | `classjournal_set_grade` | `lessonid`, `userid`, `grade`, `comment` | `grade` |
 
 Notes:
 
-- `starttime` and `endtime` are seconds from midnight; omit both for a lesson without a time.
+- `starttime` and `endtime` are seconds from midnight (`0`–`86399`), and `endtime` must be after `starttime`. Set `hastime=0` when updating a lesson to remove its time.
 - `groupid` restricts the lesson to one course group, `0` means all participants. Callers may only use groups they are allowed to see.
 - `clientrequestid` is an idempotency key: repeating a `classjournal_create_lesson` call with the same key returns the existing lesson instead of creating a duplicate.
 - Every parameter of `classjournal_update_lesson` except `lessonid` is optional and leaves the stored value unchanged when omitted.
 - `classjournal_get_lessons` and `classjournal_get_student_grades` return only the lessons the target user may see, so a student's total matches the Gradebook.
 
 Grades are checked against each lesson maximum and synced to Moodle Gradebook. `classjournal_get_student_grades` and `classjournal_get_final_grades` return the calculated final grade, aggregation mode, empty-grade mode, Gradebook maximum, display precision, and a human-readable aggregation description.
+
+Aggregation mode codes are `sum` (legacy capped sum), `rawsum` (uncapped points with a dynamic maximum), `normsum` (total earned points normalised to the configured maximum), and `avg` (an equally weighted average of lesson percentages).
 
 ### Examples
 
@@ -121,6 +123,7 @@ curl "https://moodle.example.com/webservice/rest/server.php" \
   --data "maxgrade=10" \
   --data "starttime=57600" \
   --data "endtime=63000" \
+  --data "hastime=1" \
   --data "groupid=7"
 ```
 

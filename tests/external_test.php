@@ -190,4 +190,82 @@ final class external_test extends \advanced_testcase {
             9.0
         );
     }
+
+    /**
+     * The update endpoint can explicitly add and then remove a lesson time.
+     */
+    public function test_update_lesson_can_clear_time(): void {
+        global $DB;
+
+        $updated = \mod_classjournal\external\update_lesson::execute(
+            (int)$this->lesson->id,
+            null,
+            null,
+            null,
+            null,
+            32400,
+            36000,
+            null,
+            true
+        );
+        $this->assertSame(32400, $updated['starttime']);
+        $this->assertSame(36000, $updated['endtime']);
+
+        $updated = \mod_classjournal\external\update_lesson::execute(
+            (int)$this->lesson->id,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            false
+        );
+        $this->assertNull($updated['starttime']);
+        $this->assertNull($updated['endtime']);
+
+        $stored = $DB->get_record('classjournal_lessons', ['id' => $this->lesson->id], '*', MUST_EXIST);
+        $this->assertNull($stored->starttime);
+        $this->assertNull($stored->endtime);
+    }
+
+    /**
+     * The create endpoint rejects times outside the seconds-in-a-day range.
+     */
+    public function test_create_lesson_rejects_out_of_range_time(): void {
+        $this->expectException(\moodle_exception::class);
+
+        \mod_classjournal\external\create_lesson::execute(
+            (int)$this->journal->cmid,
+            'Invalid time',
+            '',
+            time(),
+            10,
+            86400,
+            86401,
+            '',
+            0,
+            true
+        );
+    }
+
+    /**
+     * The update endpoint rejects an interval whose end is not after its start.
+     */
+    public function test_update_lesson_rejects_invalid_time_order(): void {
+        $this->expectException(\moodle_exception::class);
+
+        \mod_classjournal\external\update_lesson::execute(
+            (int)$this->lesson->id,
+            null,
+            null,
+            null,
+            null,
+            36000,
+            32400,
+            null,
+            true
+        );
+    }
 }

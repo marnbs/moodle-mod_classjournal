@@ -72,6 +72,13 @@ class update_lesson extends \external_api {
                 VALUE_DEFAULT,
                 null
             ),
+            'hastime' => new \external_value(
+                PARAM_BOOL,
+                'Set false to clear starttime and endtime, omit to keep the current time semantics',
+                VALUE_DEFAULT,
+                null,
+                NULL_ALLOWED
+            ),
         ]);
     }
 
@@ -86,6 +93,7 @@ class update_lesson extends \external_api {
      * @param int|null $starttime
      * @param int|null $endtime
      * @param int|null $groupid
+     * @param bool|null $hastime False clears the lesson time, null keeps backward-compatible semantics.
      * @return array
      */
     public static function execute(
@@ -96,7 +104,8 @@ class update_lesson extends \external_api {
         ?float $maxgrade = null,
         ?int $starttime = null,
         ?int $endtime = null,
-        ?int $groupid = null
+        ?int $groupid = null,
+        ?bool $hastime = null
     ): array {
         global $DB, $CFG;
 
@@ -109,6 +118,7 @@ class update_lesson extends \external_api {
             'starttime' => $starttime,
             'endtime' => $endtime,
             'groupid' => $groupid,
+            'hastime' => $hastime,
         ]);
 
         $lesson = $DB->get_record('classjournal_lessons', ['id' => $params['lessonid']], '*', MUST_EXIST);
@@ -136,6 +146,13 @@ class update_lesson extends \external_api {
         $endtime = $params['endtime'] === null
             ? ($lesson->endtime === null ? null : (int)$lesson->endtime)
             : (int)$params['endtime'];
+        if ($params['hastime'] !== null && !(bool)$params['hastime']) {
+            $starttime = null;
+            $endtime = null;
+        } else if ($params['hastime'] !== null && $starttime === null && $endtime === null) {
+            throw new \moodle_exception('invalidlessontime', 'classjournal');
+        }
+        classjournal_validate_lesson_times($starttime, $endtime);
 
         if ($maxgrade <= 0) {
             throw new \moodle_exception('invalidgrade', 'classjournal', '', $maxgrade);

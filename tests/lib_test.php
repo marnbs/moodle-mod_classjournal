@@ -90,6 +90,19 @@ final class lib_test extends \advanced_testcase {
     }
 
     /**
+     * Only known aggregation modes are accepted.
+     *
+     * @covers ::classjournal_normalise_aggregation
+     */
+    public function test_normalise_aggregation(): void {
+        $this->assertSame('sum', classjournal_normalise_aggregation('sum'));
+        $this->assertSame('rawsum', classjournal_normalise_aggregation('rawsum'));
+        $this->assertSame('normsum', classjournal_normalise_aggregation('normsum'));
+        $this->assertSame('avg', classjournal_normalise_aggregation('avg'));
+        $this->assertSame('sum', classjournal_normalise_aggregation('unknown'));
+    }
+
+    /**
      * A point grade is displayed against the lesson maximum, not the journal maximum.
      *
      * @covers ::classjournal_format_grade
@@ -173,6 +186,45 @@ final class lib_test extends \advanced_testcase {
     }
 
     /**
+     * Raw sum aggregation does not cap earned lesson points.
+     *
+     * @covers ::classjournal_calculate_total
+     */
+    public function test_calculate_total_raw_sum(): void {
+        $total = classjournal_calculate_total($this->journal('rawsum', 10), $this->two_lessons(), [1 => 8, 2 => 6]);
+        $this->assertEqualsWithDelta(14.0, $total, 0.0001);
+    }
+
+    /**
+     * Normalised sum weights lessons by their point maximums.
+     *
+     * @covers ::classjournal_calculate_total
+     */
+    public function test_calculate_total_normalised_sum(): void {
+        $lessons = [
+            1 => (object)['id' => 1, 'maxgrade' => 10],
+            2 => (object)['id' => 2, 'maxgrade' => 20],
+        ];
+
+        // 18 earned points out of 30 available, converted to a maximum of 100.
+        $total = classjournal_calculate_total($this->journal('normsum', 100), $lessons, [1 => 8, 2 => 10]);
+        $this->assertEqualsWithDelta(60.0, $total, 0.0001);
+    }
+
+    /**
+     * Normalised sum can either ignore empty lessons or count them as zero.
+     *
+     * @covers ::classjournal_calculate_total
+     */
+    public function test_calculate_total_normalised_sum_empty_grades(): void {
+        $ignored = classjournal_calculate_total($this->journal('normsum', 100), $this->two_lessons(), [1 => 8]);
+        $aszero = classjournal_calculate_total($this->journal('normsum', 100, 1), $this->two_lessons(), [1 => 8]);
+
+        $this->assertEqualsWithDelta(80.0, $ignored, 0.0001);
+        $this->assertEqualsWithDelta(40.0, $aszero, 0.0001);
+    }
+
+    /**
      * Average aggregation converts the mean percentage to the gradebook maximum.
      *
      * @covers ::classjournal_calculate_total
@@ -214,10 +266,20 @@ final class lib_test extends \advanced_testcase {
     public function test_aggregation_description(): void {
         $this->resetAfterTest();
         $sum = classjournal_get_aggregation_description($this->journal('sum', 100, 0));
+        $rawsum = classjournal_get_aggregation_description($this->journal('rawsum', 100, 0));
+        $normsum = classjournal_get_aggregation_description($this->journal('normsum', 100, 0));
         $avg = classjournal_get_aggregation_description($this->journal('avg', 100, 0));
         $this->assertStringContainsString(
             get_string('aggregationsumdescription', 'classjournal', '100.0'),
             $sum
+        );
+        $this->assertStringContainsString(
+            get_string('aggregationrawsumdescription', 'classjournal', '100.0'),
+            $rawsum
+        );
+        $this->assertStringContainsString(
+            get_string('aggregationnormsumdescription', 'classjournal', '100.0'),
+            $normsum
         );
         $this->assertStringContainsString(
             get_string('aggregationavgdescription', 'classjournal', '100.0'),
@@ -254,6 +316,44 @@ final class lib_test extends \advanced_testcase {
             'iteminstance' => $journal->id,
         ]);
         $this->assertNotFalse($gradeitem);
+    }
+
+    /**
+     * Raw sum keeps the Gradebook maximum in sync with lesson maximums.
+     *
+     * @covers ::classjournal_get_aggregate_grademax
+     * @covers ::classjournal_grade_item_update
+     */
+    public function test_raw_sum_gradebook_maximum_tracks_lessons(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $journal = $this->getDataGenerator()->create_module('classjournal', [
+            'course' => $course->id,
+            'aggregation' => 'rawsum',
+            'gradebookmax' => 50,
+        ]);
+        $student = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_classjournal');
+        $lessonone = $generator->create_lesson($journal, ['maxgrade' => 10]);
+        $lessontwo = $generator->create_lesson($journal, ['maxgrade' => 25]);
+        classjournal_set_lesson_grade($lessonone, $student->id, 8.0);
+        classjournal_set_lesson_grade($lessontwo, $student->id, 20.0);
+
+        $record = $DB->get_record('classjournal', ['id' => $journal->id], '*', MUST_EXIST);
+        $this->assertEqualsWithDelta(35.0, classjournal_get_aggregate_grademax($record), 0.0001);
+        $grades = classjournal_get_aggregate_grades($record, (int)$student->id);
+        $this->assertEqualsWithDelta(28.0, (float)$grades[$student->id]->rawgrade, 0.0001);
+
+        $gradeitem = \grade_item::fetch([
+            'itemtype' => 'mod',
+            'itemmodule' => 'classjournal',
+            'iteminstance' => $journal->id,
+            'itemnumber' => 0,
+        ]);
+        $this->assertNotFalse($gradeitem);
+        $this->assertEqualsWithDelta(35.0, (float)$gradeitem->grademax, 0.0001);
     }
 
     /**

@@ -9,6 +9,8 @@
 - Rejected malformed and non-finite grades instead of silently converting them to zero.
 - Recreated lesson calendar events when a class journal activity is restored.
 - Mapped course-specific lesson scales to their restored IDs during backup and restore.
+- Added explicit REST lesson-time removal and validation of time ranges and interval order.
+- Added raw-sum and normalised-sum final-grade modes while preserving the existing capped sum and average modes.
 
 #### v1.2.1 2026-09-16
 - Added a per-journal setting for displaying numeric grades, maximum grades,

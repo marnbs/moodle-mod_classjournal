@@ -68,6 +68,13 @@ class create_lesson extends \external_api {
                 VALUE_DEFAULT,
                 0
             ),
+            'hastime' => new \external_value(
+                PARAM_BOOL,
+                'Whether the lesson has a time; false clears starttime and endtime',
+                VALUE_DEFAULT,
+                null,
+                NULL_ALLOWED
+            ),
         ]);
     }
 
@@ -83,6 +90,7 @@ class create_lesson extends \external_api {
      * @param int|null $endtime
      * @param string $clientrequestid
      * @param int $groupid
+     * @param bool|null $hastime Whether the lesson has a time, null to infer from starttime and endtime.
      * @return array
      */
     public static function execute(
@@ -94,7 +102,8 @@ class create_lesson extends \external_api {
         ?int $starttime = null,
         ?int $endtime = null,
         string $clientrequestid = '',
-        int $groupid = 0
+        int $groupid = 0,
+        ?bool $hastime = null
     ): array {
         global $DB, $CFG;
 
@@ -108,6 +117,7 @@ class create_lesson extends \external_api {
             'endtime' => $endtime,
             'clientrequestid' => $clientrequestid,
             'groupid' => $groupid,
+            'hastime' => $hastime,
         ]);
 
         $cm = get_coursemodule_from_id('classjournal', $params['cmid'], 0, false, MUST_EXIST);
@@ -131,6 +141,16 @@ class create_lesson extends \external_api {
             }
         }
 
+        $starttime = $params['starttime'] === null ? null : (int)$params['starttime'];
+        $endtime = $params['endtime'] === null ? null : (int)$params['endtime'];
+        if ($params['hastime'] !== null && !(bool)$params['hastime']) {
+            $starttime = null;
+            $endtime = null;
+        } else if ($params['hastime'] !== null && $starttime === null && $endtime === null) {
+            throw new \moodle_exception('invalidlessontime', 'classjournal');
+        }
+        classjournal_validate_lesson_times($starttime, $endtime);
+
         // Idempotency: if a lesson with this client request id already exists in the
         // journal, return it unchanged instead of creating a duplicate.
         $clientrequestid = $params['clientrequestid'];
@@ -151,8 +171,8 @@ class create_lesson extends \external_api {
             $params['lessondate'] ?: time(),
             $params['maxgrade'],
             0,
-            $params['starttime'] === null ? null : (int)$params['starttime'],
-            $params['endtime'] === null ? null : (int)$params['endtime'],
+            $starttime,
+            $endtime,
             $clientrequestid,
             $lessongroupid
         );

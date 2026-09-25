@@ -45,6 +45,8 @@ class mod_classjournal_mod_form extends moodleform_mod {
 
         $options = [
             'sum' => get_string('aggregationsum', 'classjournal'),
+            'rawsum' => get_string('aggregationrawsum', 'classjournal'),
+            'normsum' => get_string('aggregationnormsum', 'classjournal'),
             'avg' => get_string('aggregationavg', 'classjournal'),
         ];
         $mform->addElement('select', 'aggregation', get_string('aggregation', 'classjournal'), $options);
@@ -57,6 +59,7 @@ class mod_classjournal_mod_form extends moodleform_mod {
         $mform->addRule('gradebookmax', null, 'required', null, 'client');
         $mform->addRule('gradebookmax', get_string('err_numeric', 'form'), 'numeric', null, 'client');
         $mform->addHelpButton('gradebookmax', 'gradebookmax', 'classjournal');
+        $mform->hideIf('gradebookmax', 'aggregation', 'eq', 'rawsum');
 
         $mform->addElement('select', 'decimalpoints', get_string('decimalpoints', 'classjournal'), array_combine(
             range(0, 5),
