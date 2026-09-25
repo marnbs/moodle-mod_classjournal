@@ -122,12 +122,63 @@ class restore_classjournal_activity_structure_step extends restore_activity_stru
         // Add classjournal related files (intro).
         $this->add_related_files('mod_classjournal', 'intro', null);
 
-        // Recreate the aggregate gradebook item and recalculated grades for the
-        // restored journal, since the gradebook item is derived rather than backed up.
+        // Recreate derived data that is not part of the activity backup.
         require_once($CFG->dirroot . '/mod/classjournal/lib.php');
         $journal = $DB->get_record('classjournal', ['id' => $this->get_task()->get_activityid()]);
         if ($journal) {
             classjournal_grade_item_update($journal);
+
+            $lessons = $DB->get_records('classjournal_lessons', ['journalid' => $journal->id]);
+            foreach ($lessons as $lesson) {
+                $eventid = $this->find_restored_lesson_event($journal, $lesson);
+                if ($eventid) {
+                    $lesson->eventid = $eventid;
+                    $DB->set_field('classjournal_lessons', 'eventid', $eventid, ['id' => $lesson->id]);
+                }
+                classjournal_sync_lesson_event($journal, $lesson);
+            }
         }
+    }
+
+    /**
+     * Find a matching course event that Moodle may already have restored.
+     *
+     * Full-course backups contain the journal's course and group calendar
+     * events separately from the activity data. Reusing an exact match avoids
+     * creating a duplicate, while activity-only restores still create a new event.
+     *
+     * @param stdClass $journal
+     * @param stdClass $lesson
+     * @return int
+     */
+    private function find_restored_lesson_event(stdClass $journal, stdClass $lesson): int {
+        global $DB;
+
+        // Non-course restores do not contain the original generic course events.
+        if ($this->get_task()->is_excluding_activities()
+                || empty($journal->calendarevents)
+                || !empty($lesson->eventid)) {
+            return 0;
+        }
+
+        $timestart = (int)$lesson->lessondate;
+        $timeduration = 0;
+        if (isset($lesson->starttime)) {
+            $timestart += (int)$lesson->starttime;
+            if (isset($lesson->endtime) && $lesson->endtime > $lesson->starttime) {
+                $timeduration = (int)$lesson->endtime - (int)$lesson->starttime;
+            }
+        }
+
+        $groupid = (int)($lesson->groupid ?? 0);
+        return (int)$DB->get_field('event', 'id', [
+            'courseid' => $journal->course,
+            'groupid' => $groupid,
+            'userid' => 0,
+            'eventtype' => $groupid ? 'group' : 'course',
+            'name' => format_string($lesson->name),
+            'timestart' => $timestart,
+            'timeduration' => $timeduration,
+        ], IGNORE_MULTIPLE);
     }
 }
