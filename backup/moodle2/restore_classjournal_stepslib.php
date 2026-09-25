@@ -88,6 +88,8 @@ class restore_classjournal_activity_structure_step extends restore_activity_stru
         // Groups may not be restored (e.g. a course without user data), in which
         // case the lesson falls back to being visible to all participants.
         $data->groupid = empty($data->groupid) ? 0 : (int)($this->get_mappingid('group', $data->groupid) ?: 0);
+        // Never retain an ID from the source site/course when its scale was not restored.
+        $data->scaleid = empty($data->scaleid) ? 0 : (int)($this->get_mappingid('scale', $data->scaleid) ?: 0);
         $data->lessondate = $this->apply_date_offset($data->lessondate);
         $data->timecreated = $this->apply_date_offset($data->timecreated);
         $data->timemodified = $this->apply_date_offset($data->timemodified);
@@ -171,14 +173,25 @@ class restore_classjournal_activity_structure_step extends restore_activity_stru
         }
 
         $groupid = (int)($lesson->groupid ?? 0);
-        return (int)$DB->get_field('event', 'id', [
-            'courseid' => $journal->course,
-            'groupid' => $groupid,
-            'userid' => 0,
-            'eventtype' => $groupid ? 'group' : 'course',
-            'name' => format_string($lesson->name),
-            'timestart' => $timestart,
-            'timeduration' => $timeduration,
-        ], IGNORE_MULTIPLE);
+        $sql = "SELECT id
+                  FROM {event}
+                 WHERE " . $DB->sql_compare_text('name', 255) . ' = ' . $DB->sql_compare_text('?', 255) . "
+                       AND courseid = ?
+                       AND groupid = ?
+                       AND userid = ?
+                       AND eventtype = ?
+                       AND timestart = ?
+                       AND timeduration = ?";
+        $params = [
+            format_string($lesson->name),
+            $journal->course,
+            $groupid,
+            0,
+            $groupid ? 'group' : 'course',
+            $timestart,
+            $timeduration,
+        ];
+
+        return (int)$DB->get_field_sql($sql, $params, IGNORE_MULTIPLE);
     }
 }

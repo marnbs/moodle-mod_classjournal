@@ -31,11 +31,11 @@ require_once($CFG->dirroot . '/backup/util/includes/restore_includes.php');
  */
 final class backup_restore_test extends \advanced_testcase {
     /**
-     * Restoring an activity recreates calendar events for its lessons.
+     * Restoring an activity recreates calendar events and maps course scales.
      *
      * @coversNothing
      */
-    public function test_restore_recreates_lesson_calendar_events(): void {
+    public function test_restore_recreates_calendar_events_and_maps_scales(): void {
         global $DB, $USER;
 
         $this->resetAfterTest();
@@ -43,6 +43,12 @@ final class backup_restore_test extends \advanced_testcase {
 
         $generator = $this->getDataGenerator();
         $sourcecourse = $generator->create_course();
+        $sourcescale = $generator->create_scale([
+            'name' => 'Class journal course scale',
+            'scale' => 'Needs work,Good,Excellent',
+            'courseid' => $sourcecourse->id,
+            'userid' => $USER->id,
+        ]);
         $journal = $generator->create_module('classjournal', [
             'course' => $sourcecourse->id,
             'calendarevents' => 1,
@@ -51,6 +57,7 @@ final class backup_restore_test extends \advanced_testcase {
         $generator->get_plugin_generator('mod_classjournal')->create_lesson($journal, [
             'name' => 'Restored calendar lesson',
             'lessondate' => $lessontime,
+            'scaleid' => $sourcescale->id,
         ]);
 
         $backupcontroller = new \backup_controller(
@@ -91,5 +98,11 @@ final class backup_restore_test extends \advanced_testcase {
         $this->assertSame($targetcourse->id, (int)$event->courseid);
         $this->assertSame($restoredlesson->name, $event->name);
         $this->assertSame((int)$restoredlesson->lessondate, (int)$event->timestart);
+
+        $this->assertNotSame((int)$sourcescale->id, (int)$restoredlesson->scaleid);
+        $restoredscale = $DB->get_record('scale', ['id' => $restoredlesson->scaleid], '*', MUST_EXIST);
+        $this->assertSame($targetcourse->id, (int)$restoredscale->courseid);
+        $this->assertSame($sourcescale->name, $restoredscale->name);
+        $this->assertSame($sourcescale->scale, $restoredscale->scale);
     }
 }

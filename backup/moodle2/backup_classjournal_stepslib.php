@@ -72,6 +72,7 @@ class backup_classjournal_activity_structure_step extends backup_activity_struct
 
         // Define id annotations.
         $lesson->annotate_ids('group', 'groupid');
+        $lesson->annotate_ids('scale', 'scaleid');
         $grade->annotate_ids('user', 'userid');
 
         // Define file annotations (intro uses the standard mod intro filearea).

@@ -27,6 +27,9 @@ require_once($CFG->dirroot . '/mod/classjournal/lib.php');
  * @package    mod_classjournal
  * @copyright  2026 Konstantin K <rbk112v@gmail.com>
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @coversNothing
+ * @runTestsInSeparateProcesses
+ * @preserveGlobalState disabled
  */
 final class external_test extends \advanced_testcase {
     /** @var \stdClass course. */

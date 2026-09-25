@@ -8,6 +8,7 @@
 - Removed the aggregate Gradebook item when a class journal activity is deleted.
 - Rejected malformed and non-finite grades instead of silently converting them to zero.
 - Recreated lesson calendar events when a class journal activity is restored.
+- Mapped course-specific lesson scales to their restored IDs during backup and restore.
 
 #### v1.2.1 2026-09-16
 - Added a per-journal setting for displaying numeric grades, maximum grades,
