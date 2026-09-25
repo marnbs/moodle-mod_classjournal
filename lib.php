@@ -90,9 +90,11 @@ function classjournal_add_instance($data, $mform = null) {
     $data->gradebookmax = classjournal_normalise_gradebookmax($data->gradebookmax ?? 100);
     $data->decimalpoints = classjournal_normalise_decimalpoints($data->decimalpoints ?? 1);
 
+    $transaction = $DB->start_delegated_transaction();
     $id = $DB->insert_record('classjournal', $data);
     $data->id = $id;
     classjournal_grade_item_update($data);
+    $transaction->allow_commit();
 
     return $id;
 }
@@ -154,9 +156,12 @@ function classjournal_create_lesson(
         'timecreated' => $now,
         'timemodified' => $now,
     ];
+
+    $transaction = $DB->start_delegated_transaction();
     $lesson->id = $DB->insert_record('classjournal_lessons', $lesson);
     classjournal_grade_item_update($journal);
     classjournal_sync_lesson_event($journal, $lesson);
+    $transaction->allow_commit();
 
     return $lesson;
 }
@@ -211,9 +216,12 @@ function classjournal_update_lesson(
         $existing->groupid = classjournal_normalise_lesson_group($journal, $groupid);
     }
     $existing->timemodified = time();
+
+    $transaction = $DB->start_delegated_transaction();
     $DB->update_record('classjournal_lessons', $existing);
     classjournal_grade_item_update($journal);
     classjournal_sync_lesson_event($journal, $existing);
+    $transaction->allow_commit();
 
     return $existing;
 }
@@ -708,6 +716,7 @@ function classjournal_update_instance($data, $mform = null) {
     $data->gradebookmax = classjournal_normalise_gradebookmax($data->gradebookmax ?? 100);
     $data->decimalpoints = classjournal_normalise_decimalpoints($data->decimalpoints ?? 1);
 
+    $transaction = $DB->start_delegated_transaction();
     $result = $DB->update_record('classjournal', $data);
     classjournal_grade_item_update($data);
 
@@ -717,6 +726,7 @@ function classjournal_update_instance($data, $mform = null) {
     foreach ($lessons as $lesson) {
         classjournal_sync_lesson_event($journal, $lesson);
     }
+    $transaction->allow_commit();
 
     return $result;
 }
@@ -734,6 +744,7 @@ function classjournal_delete_instance($id) {
         return false;
     }
 
+    $transaction = $DB->start_delegated_transaction();
     $lessons = $DB->get_records('classjournal_lessons', ['journalid' => $journal->id]);
     foreach ($lessons as $lesson) {
         classjournal_delete_lesson($lesson, false);
@@ -745,8 +756,10 @@ function classjournal_delete_instance($id) {
     }
 
     classjournal_grade_item_delete($journal);
+    $result = $DB->delete_records('classjournal', ['id' => $journal->id]);
+    $transaction->allow_commit();
 
-    return $DB->delete_records('classjournal', ['id' => $journal->id]);
+    return $result;
 }
 
 /**
@@ -773,6 +786,7 @@ function classjournal_set_lesson_grade(stdClass $lesson, int $userid, ?float $gr
     $params = ['lessonid' => $lesson->id, 'userid' => $userid];
     $record = $DB->get_record('classjournal_grades', $params);
 
+    $transaction = $DB->start_delegated_transaction();
     if ($record) {
         $record->grade = $grade;
         $record->comment = $comment;
@@ -791,6 +805,7 @@ function classjournal_set_lesson_grade(stdClass $lesson, int $userid, ?float $gr
 
     $journal = $DB->get_record('classjournal', ['id' => $lesson->journalid], '*', MUST_EXIST);
     classjournal_grade_item_update($journal, null, $userid);
+    $transaction->allow_commit();
 
     return $record->id;
 }
@@ -849,6 +864,7 @@ function classjournal_set_lesson_grades(stdClass $journal, array $lessons, array
     $written = 0;
     $touchedusers = [];
 
+    $transaction = $DB->start_delegated_transaction();
     foreach ($changes as $change) {
         $lessonid = (int)$change->lessonid;
         $userid = (int)$change->userid;
@@ -897,6 +913,7 @@ function classjournal_set_lesson_grades(stdClass $journal, array $lessons, array
     if ($touchedusers) {
         classjournal_grade_item_update($journal);
     }
+    $transaction->allow_commit();
 
     return $written;
 }
@@ -912,6 +929,7 @@ function classjournal_delete_lesson(stdClass $lesson, bool $deletegrades = true)
     global $DB;
 
     $journal = $DB->get_record('classjournal', ['id' => $lesson->journalid], '*', MUST_EXIST);
+    $transaction = $DB->start_delegated_transaction();
     classjournal_legacy_grade_item_delete($journal, $lesson);
     $affecteduserids = $DB->get_fieldset_select(
         'classjournal_grades',
@@ -937,6 +955,7 @@ function classjournal_delete_lesson(stdClass $lesson, bool $deletegrades = true)
         }
     }
     classjournal_grade_item_update($journal, $grades);
+    $transaction->allow_commit();
 }
 
 /**

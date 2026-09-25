@@ -583,6 +583,37 @@ final class lib_test extends \advanced_testcase {
     }
 
     /**
+     * A database failure in the middle of a bulk save rolls back earlier rows.
+     *
+     * @covers ::classjournal_set_lesson_grades
+     */
+    public function test_set_lesson_grades_bulk_rolls_back_on_database_error(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $generator = $this->getDataGenerator()->get_plugin_generator('mod_classjournal');
+        $journal = $this->getDataGenerator()->create_module('classjournal', ['course' => $course->id]);
+        $student = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $lesson = $generator->create_lesson($journal, ['maxgrade' => 10]);
+
+        try {
+            // Both changes are valid, but the second insert violates the unique
+            // lessonid-userid index after the first row has been written.
+            classjournal_set_lesson_grades($journal, [$lesson], [
+                (object)['lessonid' => $lesson->id, 'userid' => $student->id, 'grade' => 5.0, 'comment' => 'first'],
+                (object)['lessonid' => $lesson->id, 'userid' => $student->id, 'grade' => 6.0, 'comment' => 'second'],
+            ]);
+            $this->fail('Expected a database exception for a duplicate grade row.');
+        } catch (\dml_exception $e) {
+            $this->assertFalse($DB->record_exists('classjournal_grades', [
+                'lessonid' => $lesson->id,
+                'userid' => $student->id,
+            ]));
+        }
+    }
+
+    /**
      * Bulk saving rejects malformed grades instead of converting them to zero.
      *
      * @covers ::classjournal_set_lesson_grades

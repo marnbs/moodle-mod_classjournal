@@ -117,6 +117,7 @@ if ($canmanage && ($action === 'add' || ($action === 'edit' && $lessonid))) {
         } else {
             $repeatcount = max(1, min(100, (int)($data->repeatcount ?? 1)));
             $repeatinterval = max(1, min(52, (int)($data->repeatinterval ?? 1)));
+            $transaction = $DB->start_delegated_transaction();
             for ($i = 0; $i < $repeatcount; $i++) {
                 $currentdate = strtotime('+' . ($i * $repeatinterval) . ' weeks', (int)$data->lessondate);
                 classjournal_create_lesson(
@@ -132,6 +133,7 @@ if ($canmanage && ($action === 'add' || ($action === 'edit' && $lessonid))) {
                     $groupid
                 );
             }
+            $transaction->allow_commit();
         }
         redirect($baseurl);
     } else if ($editing) {
@@ -210,12 +212,14 @@ if ($canmanage && $action === 'changedate' && confirm_sesskey()) {
             $inparams += $groupparams;
         }
         $lessonstomove = $DB->get_records_select('classjournal_lessons', $movewhere, $inparams);
+        $transaction = $DB->start_delegated_transaction();
         foreach ($lessonstomove as $lesson) {
             $lesson->lessondate = (int)$data->lessondate;
             $lesson->timemodified = time();
             $DB->update_record('classjournal_lessons', $lesson);
             classjournal_sync_lesson_event($journal, $lesson);
         }
+        $transaction->allow_commit();
         redirect($baseurl, get_string('lessonsdatechanged', 'classjournal'), null, \core\output\notification::NOTIFY_SUCCESS);
     }
 
@@ -247,9 +251,11 @@ if ($canmanage && $action === 'bulkdelete' && confirm_sesskey()) {
     );
 
     if ($confirm) {
+        $transaction = $DB->start_delegated_transaction();
         foreach ($lessonsfordelete as $lesson) {
             classjournal_delete_lesson($lesson);
         }
+        $transaction->allow_commit();
         redirect($baseurl, get_string('lessonsdeleted', 'classjournal'), null, \core\output\notification::NOTIFY_SUCCESS);
     }
 
